@@ -1472,6 +1472,10 @@ function createApp() {
     res.on("close", release);
     prev.then(async () => {
       try {
+        if (req.path === "/admin/login") {
+          next();
+          return;
+        }
         if (process.env.VERCEL && !useFirestore) {
           res.status(503).json({
             error: "\u0E23\u0E30\u0E1A\u0E1A\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 (FIREBASE_SERVICE_ACCOUNT)"

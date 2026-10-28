@@ -285,6 +285,11 @@ export function createApp() {
 
     prev.then(async () => {
       try {
+        // Login only checks the env-var passcode, so it doesn't need the database.
+        if (req.path === '/admin/login') {
+          next();
+          return;
+        }
         if (process.env.VERCEL && !useFirestore) {
           res.status(503).json({
             error: 'ระบบฐานข้อมูลยังไม่ได้ตั้งค่า (FIREBASE_SERVICE_ACCOUNT)',
