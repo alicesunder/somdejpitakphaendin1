@@ -1,6 +1,6 @@
 # ขึ้นเว็บจริง (Vercel + Firebase Firestore)
 
-โครงสร้าง: หน้าเว็บ (Vite) + API (`api/index.js`, Express เป็น Vercel Function) เก็บข้อมูลทั้งหมดใน Firestore
+โครงสร้าง: หน้าเว็บ (Vite) + API (`api/[...all].js`, Express เป็น Vercel Function) เก็บข้อมูลทั้งหมดใน Firestore
 ผ่านเซิร์ฟเวอร์เท่านั้น — เบราว์เซอร์ไม่คุย Firestore โดยตรง
 
 ## 1. Firebase
@@ -28,5 +28,5 @@ Vercel → Settings → Domains → เพิ่ม `www.somdejpitakphaendin.com
 - ล็อกอินหลังบ้านด้วย `ADMIN_EMAIL`/`ADMIN_PASSCODE`
 
 ## หมายเหตุ
-- แก้ `server.ts` หรือ `server/` แล้วต้องรัน `npm run build` และ commit ไฟล์ `api/index.js` ที่เปลี่ยนด้วย
+- แก้ `server.ts` หรือ `server/` แล้วต้องรัน `npm run build` และ commit ไฟล์ `api/[...all].js` ที่เปลี่ยนด้วย
 - รันในเครื่อง: `npm run dev` (ไม่ตั้ง `FIREBASE_SERVICE_ACCOUNT` จะเก็บเป็นไฟล์ใน `.data/`)
