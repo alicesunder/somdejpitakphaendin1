@@ -1,0 +1,341 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Border Patrol Police Bold';
+  src: url('/assets/fonts/tchd-font-1.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --color-royal-obsidian: #080705;
+    --color-royal-deep: #14100A;
+    --color-royal-sanctuary: #1F180E;
+    --color-royal-premium: #8A6D2F;
+    --color-antique-gold: #C9A45C;
+    --color-radiant-gold: #FCE694;
+    --color-warm-ivory: #F7F2E8;
+    --color-parchment-deep: #EFE7D6;
+    --color-pure-white: #FFFFFF;
+    --color-ink-black: #18140E;
+    --color-muted-gray: #787062;
+    --color-border-gray: #E5DEC9;
+
+    --font-bpp-official: 'Border Patrol Police Bold', 'Noto Serif Thai', Georgia, serif;
+    --font-serif-thai: 'Border Patrol Police Bold', 'Noto Serif Thai', Georgia, serif;
+    --font-sans-thai: 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono-num: 'IBM Plex Sans Thai', 'IBM Plex Mono', monospace;
+  }
+
+  html {
+    font-family: var(--font-sans-thai);
+    color: var(--color-ink-black);
+    background-color: var(--color-royal-obsidian);
+    scroll-behavior: smooth;
+  }
+
+  body {
+    overflow-x: hidden;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, .font-serif-heritage, .font-bpp-official {
+    font-family: var(--font-bpp-official);
+    letter-spacing: 0.015em;
+    line-height: 1.32;
+    text-wrap: balance;
+  }
+
+  .font-bpp-motto {
+    font-family: var(--font-bpp-official);
+    letter-spacing: 0.04em;
+    line-height: 1.35;
+  }
+
+  .font-tabular {
+    font-family: var(--font-mono-num);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+/* Keyframe Animations (Compositor-only: transform & opacity) */
+@keyframes sacredMandalaSpin {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.04);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes sacredHaloBreath {
+  0%, 100% {
+    opacity: 0.42;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 0.78;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes sacredFloatSlow {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes sacredRevealUp {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sacred-stagger-reveal {
+  0% {
+    opacity: 0;
+    transform: perspective(1000px) translate3d(0, 24px, -26px) rotateX(4deg) scale(0.965);
+  }
+  68% {
+    opacity: 1;
+    transform: perspective(1000px) translate3d(0, -2px, 4px) rotateX(-0.4deg) scale(1.003);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(1000px) translate3d(0, 0, 0) rotateX(0deg) scale(1);
+  }
+}
+
+@keyframes sacredPedestalFlip {
+  0% {
+    opacity: 0.45;
+    transform: perspective(900px) rotateY(-18deg) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(900px) rotateY(0deg) scale(1);
+  }
+}
+
+@keyframes goldShimmerSweep {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(220%) skewX(-18deg);
+  }
+}
+
+@keyframes heroKenBurns {
+  0% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1.01);
+  }
+}
+
+@keyframes sunbeamPulse {
+  0%, 100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.92;
+  }
+}
+
+.animate-mandala-slow {
+  animation: sacredMandalaSpin 56s linear infinite;
+}
+
+.animate-halo-breath {
+  animation: sacredHaloBreath 6s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: sacredFloatSlow 5.5s ease-in-out infinite;
+}
+
+.animate-hero-kenburns {
+  animation: heroKenBurns 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-sunbeam-pulse {
+  animation: sunbeamPulse 6s ease-in-out infinite;
+}
+
+.animate-sacred-reveal {
+  animation: sacredRevealUp 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sacred-stagger-reveal {
+  animation: sacred-stagger-reveal 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--stagger-index, 0) * 70ms);
+  will-change: transform, opacity;
+}
+
+.animate-pedestal-flip {
+  animation: sacredPedestalFlip 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.text-gold-shimmer {
+  background: linear-gradient(180deg, #FFFDF2 0%, #F6DC86 48%, #C69635 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-mandala-slow,
+  .animate-halo-breath,
+  .animate-float-slow,
+  .animate-sacred-reveal,
+  .sacred-stagger-reveal,
+  .animate-pedestal-flip {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* Chiaroscuro 3D Museum Pedestal & Shrine Surfaces (Gilded Black Lacquer / ลงรักปิดทอง) */
+.sacred-shrine-pedestal {
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(252, 230, 148, 0.18) 0%, rgba(168, 130, 56, 0.14) 38%, rgba(12, 10, 7, 0.98) 100%),
+    linear-gradient(180deg, #211A10 0%, #120E09 65%, #090705 100%);
+  box-shadow:
+    0 28px 64px -12px rgba(0, 0, 0, 0.95),
+    0 8px 24px -4px rgba(0, 0, 0, 0.8),
+    0 0 42px -10px rgba(212, 175, 55, 0.32),
+    inset 0 1px 0 0 rgba(252, 230, 148, 0.48),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.9);
+}
+
+.sacred-vault-card {
+  background:
+    radial-gradient(100% 80% at 50% 0%, rgba(212, 175, 55, 0.15) 0%, rgba(44, 34, 18, 0.42) 45%, rgba(12, 10, 7, 0.98) 100%),
+    linear-gradient(180deg, #1C160D 0%, #0E0B08 100%);
+  box-shadow:
+    0 20px 44px -10px rgba(0, 0, 0, 0.9),
+    0 4px 12px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 0 rgba(252, 230, 148, 0.34),
+    inset 0 0 0 1px rgba(201, 164, 92, 0.28);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sacred-vault-card:hover {
+  transform: translateY(-5px);
+  box-shadow:
+    0 28px 56px -10px rgba(0, 0, 0, 0.96),
+    0 0 34px -6px rgba(229, 193, 88, 0.38),
+    inset 0 1px 0 0 rgba(252, 230, 148, 0.72),
+    inset 0 0 0 1px rgba(252, 230, 148, 0.52);
+}
+
+/* Dimensional Obsidian & Gold Sanctuary Card */
+.archival-paper-card {
+  background:
+    radial-gradient(110% 85% at 50% 0%, rgba(252, 230, 148, 0.14) 0%, rgba(46, 35, 18, 0.42) 48%, rgba(12, 10, 7, 0.98) 100%),
+    linear-gradient(180deg, #1D170E 0%, #0E0B08 100%);
+  color: #F7F2E8;
+  box-shadow:
+    0 22px 48px -12px rgba(0, 0, 0, 0.92),
+    0 4px 14px -2px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 0 rgba(252, 230, 148, 0.38),
+    inset 0 0 0 1px rgba(201, 164, 92, 0.32);
+}
+
+/* Metallic 24K Gold Foil Button with Specular Depth */
+.btn-sacred-gold {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #FFF5BF 0%, #E7C466 45%, #B88928 100%);
+  color: #0D0A06;
+  box-shadow:
+    0 10px 26px -4px rgba(201, 164, 92, 0.52),
+    0 2px 6px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(110, 76, 14, 0.55);
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1), filter 180ms ease;
+}
+
+.btn-sacred-gold:hover {
+  transform: translateY(-1.5px);
+  filter: brightness(1.05);
+  box-shadow:
+    0 14px 32px -4px rgba(229, 193, 88, 0.65),
+    0 4px 10px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.btn-sacred-gold:active {
+  transform: translateY(0px);
+}
+
+/* Specular Sheen Sweep on Amulet Image Hover */
+.amulet-specular-sheen::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(252, 230, 148, 0.22) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: translateX(-140%) skewX(-18deg);
+  pointer-events: none;
+}
+
+.group:hover .amulet-specular-sheen::after {
+  animation: goldShimmerSweep 950ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Subtle traditional Thai border frame accent */
+.heritage-frame {
+  position: relative;
+  border: 1px solid #E8E1E9;
+}
+
+.heritage-gold-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(201, 164, 92, 0.75) 50%, transparent 100%);
+}
+
+@media print {
+  html,
+  body {
+    background: #FFFFFF !important;
+    color: #18140E !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  #printable-reservation-slip {
+    box-shadow: none !important;
+    border: 2px solid #8A6D2F !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+}
+

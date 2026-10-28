@@ -1,0 +1,290 @@
+{
+  "entities": {
+    "ProductCatalogItem": {
+      "title": "ProductCatalogItem",
+      "description": "Sacred amulet or special commemorative set in the 75th Anniversary BPP catalog with real-time stock tracking.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique product identifier"
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Official catalog code (ช1-ช3, ชศ1-ชศ20)"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Thai name of the amulet or set"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "special_set",
+            "cat_1_popular_metal",
+            "cat_2_score_metal",
+            "cat_3_popular_powder",
+            "cat_4_score_powder",
+            "royal_project_heritage",
+            "commemorative_coin",
+            "sacred_powder",
+            "bucha_statue"
+          ],
+          "description": "Product category key"
+        },
+        "price": {
+          "type": "number",
+          "description": "Unit price in THB"
+        },
+        "stock": {
+          "type": "number",
+          "description": "Remaining stock count for limited items"
+        },
+        "initialStock": {
+          "type": "number",
+          "description": "Initial production allocation"
+        },
+        "bookedCount": {
+          "type": "number",
+          "description": "Total units reserved across confirmed orders"
+        },
+        "isMadeToOrder": {
+          "type": "boolean",
+          "description": "True if stock is unlimited (ตามจอง)"
+        },
+        "isVisible": {
+          "type": "boolean",
+          "description": "True if visible in public storefront"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64,
+          "description": "ISO timestamp of last inventory update"
+        }
+      },
+      "required": [
+        "id",
+        "code",
+        "name",
+        "category",
+        "price",
+        "stock",
+        "initialStock",
+        "bookedCount",
+        "isMadeToOrder",
+        "isVisible",
+        "updatedAt"
+      ]
+    },
+    "RajaSetNumberSlot": {
+      "title": "RajaSetNumberSlot",
+      "description": "Public atomic reservation state for Set 1 (ช1 ชุดทองคำใหญ่ราชาฤกษ์) numbers 1 through 99 with 15-minute hold expiration. Contains no PII.",
+      "type": "object",
+      "properties": {
+        "slotNumber": {
+          "type": "number",
+          "description": "Selectable serial number from 1 to 99"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["available", "held", "booked"],
+          "description": "Current reservation status of this number"
+        },
+        "sessionId": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Client session identifier holding or booking the slot"
+        },
+        "heldAt": {
+          "type": "number",
+          "description": "Epoch milliseconds when the 15-minute hold started"
+        },
+        "heldUntil": {
+          "type": "number",
+          "description": "Epoch milliseconds when the 15-minute hold expires"
+        },
+        "orderNumber": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Order number once confirmed"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64,
+          "description": "ISO timestamp of last state transition"
+        }
+      },
+      "required": [
+        "slotNumber",
+        "status",
+        "sessionId",
+        "heldAt",
+        "heldUntil",
+        "orderNumber",
+        "updatedAt"
+      ]
+    },
+    "ReservationOrder": {
+      "title": "ReservationOrder",
+      "description": "Confirmed amulet reservation record containing isolated customer PII, itemized summary, selected Raja set numbers, and Thai Baht text total.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique reservation ID"
+        },
+        "orderNumber": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Auto-generated reservation slip number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64,
+          "description": "ISO creation timestamp"
+        },
+        "reservationDateThai": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Formatted Thai date of reservation"
+        },
+        "customerName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120,
+          "description": "Full name of the reservist"
+        },
+        "organization": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "Unit, agency, or organization of the reservist"
+        },
+        "customerPhone": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 32,
+          "description": "Contact phone number"
+        },
+        "shippingAddress": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "Delivery address or pickup note"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["promptpay", "bank_transfer"],
+          "description": "Selected payment method"
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "Items subtotal in THB"
+        },
+        "shippingTotal": {
+          "type": "number",
+          "description": "Shipping fee in THB"
+        },
+        "grandTotal": {
+          "type": "number",
+          "description": "Grand total in THB"
+        },
+        "grandTotalThaiText": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Grand total spelled out in formal Thai Baht text"
+        },
+        "selectedNumbers": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "Comma-separated list of reserved Set 1 numbers (1-99)"
+        },
+        "itemsJson": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "Compact summary of reserved line items"
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["pending_verification", "verified_paid", "payment_rejected"],
+          "description": "Payment verification state"
+        },
+        "sessionId": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Session ID that created the reservation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64,
+          "description": "Last status update timestamp"
+        }
+      },
+      "required": [
+        "id",
+        "orderNumber",
+        "createdAt",
+        "reservationDateThai",
+        "customerName",
+        "organization",
+        "customerPhone",
+        "shippingAddress",
+        "paymentMethod",
+        "subtotal",
+        "shippingTotal",
+        "grandTotal",
+        "grandTotalThaiText",
+        "selectedNumbers",
+        "itemsJson",
+        "paymentStatus",
+        "sessionId",
+        "updatedAt"
+      ]
+    },
+    "AdminProfile": {
+      "title": "AdminProfile",
+      "description": "Authorized administrator registry document.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Verified administrator email"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"],
+          "description": "Role identifier"
+        }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/ProductCatalogItem" },
+      "description": "Catalog items with real-time stock counts for all 23 codes (ช1-ช3, ชศ1-ชศ20)"
+    },
+    "/rajaSlots/{slotId}": {
+      "schema": { "$ref": "#/entities/RajaSetNumberSlot" },
+      "description": "Real-time atomic reservation grid for Set 1 (ช1) numbers 1-99"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/ReservationOrder" },
+      "description": "Reservation orders containing isolated customer PII and payment status"
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminProfile" },
+      "description": "Administrator access control list"
+    }
+  }
+}

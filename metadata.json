@@ -1,0 +1,6 @@
+{
+  "name": "วัตถุมงคล ตชด. — Royal Purple Sacred Heritage",
+  "description": "คลังวัตถุมงคลและเหรียญที่ระลึกตำรวจตระเวนชายแดน (ตชด.) นำเสนอข้อมูลรุ่น วัสดุ และประวัติการจัดสร้างอย่างโปร่งใส",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
