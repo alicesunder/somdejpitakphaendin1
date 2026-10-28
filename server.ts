@@ -1,5 +1,4 @@
 import express, { Request, Response, NextFunction } from 'express';
-import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -31,6 +30,11 @@ import {
   validateCheckoutForm,
   verifyPhoneLast4,
 } from './src/utils/commerceRules';
+import {
+  ColName,
+  createFirestoreStore,
+  isFirestoreConfigured,
+} from './server/firestoreStore';
 
 interface StoreData {
   siteConfig: SiteConfig;
@@ -40,6 +44,17 @@ interface StoreData {
   news: NewsArticle[];
   inquiries: ContactInquiry[];
 }
+
+// Production (Vercel) persists to Firestore; local dev falls back to a JSON file.
+const useFirestore = isFirestoreConfigured();
+const firestoreStore = useFirestore
+  ? createFirestoreStore(() => ({
+      siteConfig: structuredClone(initialSiteConfig),
+      products: structuredClone(initialProducts),
+      rajaSlots: createInitialRajaSlots(),
+      news: structuredClone(initialNews),
+    }))
+  : null;
 
 const DATA_DIR = path.resolve(process.cwd(), '.data');
 const DATA_FILE = path.join(DATA_DIR, 'heritage_store_v6.json');
@@ -70,6 +85,15 @@ function loadStore(): StoreData {
     }
   } catch (err) {
     console.warn('Initializing fresh store data:', err);
+    try {
+      if (fs.existsSync(DATA_FILE)) {
+        const backup = `${DATA_FILE}.corrupt-${Date.now()}`;
+        fs.copyFileSync(DATA_FILE, backup);
+        console.warn(`Unreadable store backed up to ${backup}`);
+      }
+    } catch {
+      // best-effort backup only
+    }
   }
 
   const fresh: StoreData = {
@@ -85,17 +109,30 @@ function loadStore(): StoreData {
 }
 
 function saveStore(data: StoreData): void {
+  // Firestore mode: changes are diffed and persisted before each API response.
+  if (useFirestore) return;
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    const tmpFile = `${DATA_FILE}.tmp`;
+    fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2), 'utf-8');
+    fs.renameSync(tmpFile, DATA_FILE);
   } catch (err) {
     console.error('Failed to persist store data:', err);
   }
 }
 
-const store: StoreData = loadStore();
+const store: StoreData = useFirestore
+  ? {
+      siteConfig: structuredClone(initialSiteConfig),
+      products: [],
+      orders: [],
+      rajaSlots: [],
+      news: [],
+      inquiries: [],
+    }
+  : loadStore();
 
 /**
  * Purges any 15-minute slot holds that have expired and syncs ช1 remaining stock.
@@ -139,9 +176,44 @@ function purgeExpiredRajaSlotHolds(): boolean {
 
 // Admin session store (Server-side verification)
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@bpp-heritage.demo';
-const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'BPP-Admin-2026';
-const activeAdminTokens = new Map<string, { email: string; expiresAt: number }>();
-const processedIdempotencyKeys = new Map<string, string>(); // key -> orderNumber
+// No hardcoded passcode: set ADMIN_PASSCODE in the environment. Outside production a
+// random one is generated per start and printed to the server console.
+let ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || '';
+if (!ADMIN_PASSCODE && process.env.NODE_ENV !== 'production') {
+  ADMIN_PASSCODE = crypto.randomBytes(9).toString('base64url');
+  console.warn(
+    `ADMIN_PASSCODE not set — temporary dev admin login: ${ADMIN_EMAIL} / ${ADMIN_PASSCODE}`,
+  );
+} else if (!ADMIN_PASSCODE) {
+  console.error('ADMIN_PASSCODE is not set; admin login is disabled.');
+}
+// Stateless signed admin tokens (serverless instances share no memory).
+const TOKEN_SECRET =
+  process.env.ADMIN_TOKEN_SECRET ||
+  crypto.createHash('sha256').update(`bpp-admin:${ADMIN_PASSCODE}`).digest('hex');
+const ADMIN_TOKEN_TTL_MS = 1000 * 60 * 60 * 8;
+
+function signAdminToken(email: string): string {
+  const exp = Date.now() + ADMIN_TOKEN_TTL_MS;
+  const body = Buffer.from(JSON.stringify({ email, exp })).toString('base64url');
+  const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+
+function verifyAdminToken(token: string): boolean {
+  const [body, sig] = token.split('.');
+  if (!body || !sig || !ADMIN_PASSCODE) return false;
+  const expected = crypto.createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url');
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+  try {
+    const { exp } = JSON.parse(Buffer.from(body, 'base64url').toString('utf-8'));
+    return typeof exp === 'number' && exp > Date.now();
+  } catch {
+    return false;
+  }
+}
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization || '';
@@ -151,9 +223,7 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return;
   }
 
-  const session = activeAdminTokens.get(token);
-  if (!session || session.expiresAt < Date.now()) {
-    activeAdminTokens.delete(token);
+  if (!verifyAdminToken(token)) {
     res.status(401).json({ error: 'เซสชันผู้ดูแลหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
     return;
   }
@@ -198,16 +268,62 @@ function enrichRajaSlotsForAdmin(): RajaSetSlot[] {
   });
 }
 
-async function startServer() {
+export function createApp() {
   const app = express();
-  const PORT = 3000;
 
   app.use(express.json({ limit: '2mb' }));
 
-  // Background interval to auto-release expired 15-minute slot holds
-  setInterval(() => {
-    purgeExpiredRajaSlotHolds();
-  }, 15_000);
+  // Every API request is handled one at a time per instance: load the latest
+  // data, run the handler, and persist any changes *before* the response is sent
+  // (serverless functions are frozen as soon as they respond).
+  let queue: Promise<void> = Promise.resolve();
+  app.use('/api', (req, res, next) => {
+    const prev = queue;
+    let release!: () => void;
+    queue = new Promise<void>((r) => (release = r));
+    res.on('close', release);
+
+    prev.then(async () => {
+      try {
+        if (process.env.VERCEL && !useFirestore) {
+          res.status(503).json({
+            error: 'ระบบฐานข้อมูลยังไม่ได้ตั้งค่า (FIREBASE_SERVICE_ACCOUNT)',
+          });
+          return;
+        }
+        if (firestoreStore) {
+          const cols: ColName[] = [];
+          if (req.path.startsWith('/orders') || req.path.startsWith('/admin')) {
+            cols.push('orders');
+          }
+          if (req.path.startsWith('/admin')) cols.push('inquiries');
+          await firestoreStore.load(store as unknown as Record<string, any>, cols);
+        }
+        if (firestoreStore) {
+          const originalJson = res.json.bind(res);
+          res.json = ((body?: unknown) => {
+            firestoreStore
+              .persist(store as unknown as Record<string, any>)
+              .then(() => originalJson(body))
+              .catch((err: any) => {
+                console.error('Persist failed:', err);
+                res.status(err?.conflict ? 409 : 500);
+                originalJson({
+                  error: err?.conflict
+                    ? 'มีผู้ใช้อื่นกำลังแก้ไขข้อมูลพร้อมกัน กรุณาลองอีกครั้ง'
+                    : 'บันทึกข้อมูลไม่สำเร็จ กรุณาลองอีกครั้ง',
+                });
+              });
+            return res;
+          }) as typeof res.json;
+        }
+        next();
+      } catch (err) {
+        console.error('Store load failed:', err);
+        res.status(500).json({ error: 'เชื่อมต่อฐานข้อมูลไม่สำเร็จ' });
+      }
+    });
+  });
 
   // 1. Public Storefront Bootstrap
   app.get('/api/bootstrap', (_req, res) => {
@@ -337,10 +453,9 @@ async function startServer() {
     } = req.body || {};
 
     if (idempotencyKey && typeof idempotencyKey === 'string') {
-      const existingOrderNumber = processedIdempotencyKeys.get(idempotencyKey);
-      if (existingOrderNumber) {
+      {
         const existingOrder = store.orders.find(
-          (o) => o.orderNumber === existingOrderNumber
+          (o) => (o as OrderRecord & { idempotencyKey?: string }).idempotencyKey === idempotencyKey
         );
         if (existingOrder) {
           res.status(200).json({
@@ -535,7 +650,7 @@ async function startServer() {
 
     store.orders.unshift(newOrder);
     if (idempotencyKey && typeof idempotencyKey === 'string') {
-      processedIdempotencyKeys.set(idempotencyKey, orderNumber);
+      (newOrder as OrderRecord & { idempotencyKey?: string }).idempotencyKey = idempotencyKey;
     }
     saveStore(store);
 
@@ -605,14 +720,11 @@ async function startServer() {
   app.post('/api/admin/login', (req, res) => {
     const { email, passcode } = req.body || {};
     if (
+      ADMIN_PASSCODE &&
       String(email || '').trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() &&
       String(passcode || '').trim() === ADMIN_PASSCODE
     ) {
-      const token = crypto.randomBytes(24).toString('hex');
-      activeAdminTokens.set(token, {
-        email: ADMIN_EMAIL,
-        expiresAt: Date.now() + 1000 * 60 * 60 * 8,
-      });
+      const token = signAdminToken(ADMIN_EMAIL);
       res.json({
         token,
         adminEmail: ADMIN_EMAIL,
@@ -626,9 +738,7 @@ async function startServer() {
   });
 
   app.post('/api/admin/logout', requireAdmin, (req, res) => {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.slice(7).trim();
-    activeAdminTokens.delete(token);
+    // Tokens are stateless and expire on their own; the client discards its copy.
     res.json({ success: true });
   });
 
@@ -1008,8 +1118,24 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  return app;
+}
+
+async function startServer() {
+  const app = createApp();
+  const PORT = Number(process.env.PORT) || 3000;
+
+  // Background interval to auto-release expired 15-minute slot holds (file mode only;
+  // in Firestore mode expiry is purged on each request).
+  if (!useFirestore) {
+    setInterval(() => {
+      purgeExpiredRajaSlotHolds();
+    }, 15_000);
+  }
+
   // Vite middleware for dev / static serving for prod
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -1023,9 +1149,11 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
     console.log(`Sacred Heritage Store Server running on http://localhost:${PORT}`);
   });
 }
 
-startServer();
+if (!process.env.VERCEL && !process.env.BPP_NO_LISTEN) {
+  startServer();
+}

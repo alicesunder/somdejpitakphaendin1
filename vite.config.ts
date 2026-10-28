@@ -54,8 +54,8 @@ function parseTtfNames(ttfBuf: Buffer): Record<string, string> {
 
 function extractUploadedFontZip() {
   try {
-    const zipPath = path.resolve(__dirname, 'public/assets/aistudio/_____-____3b01bffb.zip');
-    const outDir = path.resolve(__dirname, 'public/assets/fonts');
+    const zipPath = path.resolve(import.meta.dirname, 'public/assets/aistudio/_____-____3b01bffb.zip');
+    const outDir = path.resolve(import.meta.dirname, 'public/assets/fonts');
     if (!fs.existsSync(zipPath)) return;
     if (!fs.existsSync(outDir)) {
       fs.mkdirSync(outDir, { recursive: true });
@@ -146,7 +146,16 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
+      },
+    },
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [{ name: "firebase", test: /node_modules[\/](@firebase|firebase)[\/]/ }],
+          },
+        },
       },
     },
     server: {

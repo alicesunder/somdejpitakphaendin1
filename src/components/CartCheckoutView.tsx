@@ -31,7 +31,6 @@ import {
   resolveOrderDeliveryMethod,
   validateCheckoutForm,
 } from '../utils/commerceRules';
-import { confirmOrderInFirestoreTransaction } from '../firebase';
 import { BppCrestLogo, SpecimenPlate } from './SacredArtwork';
 import { RajaNumberGridModal } from './RajaNumberGridModal';
 
@@ -202,41 +201,6 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
       }
 
       const createdOrder: PublicTrackedOrder = data.order;
-
-      // Also persist to Firebase Firestore transactionally for real-time cross-client sync
-      const fullRecordForFirestore: OrderRecord = {
-        id: `ord-${Date.now()}`,
-        orderNumber: createdOrder.orderNumber,
-        createdAt: createdOrder.createdAt,
-        reservationDateThai:
-          createdOrder.reservationDateThai || autoDateThai,
-        customerName: customerName.trim(),
-        organization: cleanOrg,
-        customerPhone: customerPhone.trim(),
-        shippingAddress: effectiveAddress,
-        postalCode: effectivePostal,
-        paymentMethod,
-        items: createdOrder.items,
-        selectedNumbers: createdOrder.selectedNumbers,
-        subtotal: createdOrder.subtotal,
-        shippingTotal: createdOrder.shippingTotal,
-        grandTotal: createdOrder.grandTotal,
-        grandTotalThaiText:
-          createdOrder.grandTotalThaiText ||
-          numberToThaiBahtText(createdOrder.grandTotal),
-        paymentStatus: createdOrder.paymentStatus,
-        preparationStatus: createdOrder.preparationStatus,
-        shippingStatus: createdOrder.shippingStatus,
-        statusHistory: createdOrder.statusHistory,
-        sessionId,
-        isDemoOrder: false,
-      };
-
-      void confirmOrderInFirestoreTransaction(
-        fullRecordForFirestore,
-        createdOrder.selectedNumbers || [],
-        sessionId
-      );
 
       setConfirmedOrder({
         ...createdOrder,

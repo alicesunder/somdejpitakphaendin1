@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Heart } from 'lucide-react';
 import {
   createInitialRajaSlots,
@@ -23,12 +23,6 @@ import {
   getEffectiveSlotState,
   toggleWishlistId,
 } from './utils/commerceRules';
-import {
-  ensureFirestoreRajaSlotsSeeded,
-  releaseExpiredHoldsInFirestore,
-  subscribeToRajaSlots,
-  toggleRajaSlotInFirestore,
-} from './firebase';
 import { AppView, Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { HomeView } from './components/HomeView';
@@ -41,7 +35,9 @@ import {
   FaqContactView,
   NewsStoriesView,
 } from './components/HistoryNewsFaqViews';
-import { AdminDashboardView } from './components/AdminDashboardView';
+const AdminDashboardView = lazy(() =>
+  import('./components/AdminDashboardView').then((m) => ({ default: m.AdminDashboardView })),
+);
 import { RajaNumberGridModal } from './components/RajaNumberGridModal';
 
 function getOrCreateBuyerSessionId(): string {
@@ -125,7 +121,6 @@ export default function App() {
       if (Array.isArray(data.products)) setProducts(data.products);
       if (Array.isArray(data.rajaSlots)) {
         setRajaSlots(data.rajaSlots);
-        void ensureFirestoreRajaSlotsSeeded(data.rajaSlots);
       }
       if (Array.isArray(data.news)) setNews(data.news);
       if (data.siteConfig) setSiteConfig(data.siteConfig);
@@ -138,12 +133,21 @@ export default function App() {
     fetchStoreBootstrap();
   }, [fetchStoreBootstrap]);
 
-  // Subscribe to real-time 1–99 slot updates from Firestore
+  // Keep the 1–99 slot grid fresh by polling the server (single source of truth)
   useEffect(() => {
-    const unsubscribe = subscribeToRajaSlots((liveSlots) => {
-      setRajaSlots(liveSlots);
-    });
-    return () => unsubscribe();
+    const timer = window.setInterval(async () => {
+      if (document.visibilityState === 'hidden') return;
+      try {
+        const res = await fetch('/api/raja-slots');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.rajaSlots)) setRajaSlots(data.rajaSlots);
+        }
+      } catch {
+        // ignore network error
+      }
+    }, 5000);
+    return () => window.clearInterval(timer);
   }, []);
 
   // Periodic 15-minute hold expiry check (every 15 seconds)
@@ -162,10 +166,9 @@ export default function App() {
       } catch {
         // ignore network error
       }
-      void releaseExpiredHoldsInFirestore(rajaSlots);
     }, 15000);
     return () => window.clearInterval(timer);
-  }, [rajaSlots]);
+  }, []);
 
   // Compute numbers currently held by this buyer's session
   const selectedRajaNumbers = useMemo(() => {
@@ -337,9 +340,6 @@ export default function App() {
         if (Array.isArray(data.rajaSlots)) {
           setRajaSlots(data.rajaSlots);
         }
-        // Mirror atomic lock into Firestore in parallel
-        void toggleRajaSlotInFirestore(slotNumber, sessionId);
-
         if (data.action === 'held') {
           setCartToast(
             `ล็อกหมายเลข #${String(slotNumber).padStart(2, '0')} ชุดทองคำใหญ่ราชาฤกษ์ (ช1) ลงในตะกร้าแล้ว`
@@ -348,15 +348,10 @@ export default function App() {
         }
         return { success: true };
       } catch {
-        // Fallback to direct Firestore transaction if API is unreachable
-        const fsResult = await toggleRajaSlotInFirestore(slotNumber, sessionId);
-        if (!fsResult.success) {
-          return {
-            success: false,
-            error: fsResult.error || 'ไม่สามารถเลือกหมายเลขได้',
-          };
-        }
-        return { success: true };
+        return {
+          success: false,
+          error: 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+        };
       }
     },
     [sessionId]
@@ -631,7 +626,8 @@ export default function App() {
 
           {currentView === 'admin' && (
             <div className="bg-gradient-to-b from-[#F7F2E8] to-[#EFE7D6] text-[#18140E] min-h-screen">
-              <AdminDashboardView
+              <Suspense fallback={<div className="p-10 text-center">กำลังโหลด...</div>}>
+<AdminDashboardView
                 adminToken={adminToken}
                 onLoginSuccess={(token) => {
                   setAdminToken(token);
@@ -651,6 +647,7 @@ export default function App() {
                 }}
                 onStoreUpdated={fetchStoreBootstrap}
               />
+</Suspense>
             </div>
           )}
         </div>

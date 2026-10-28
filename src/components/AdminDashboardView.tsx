@@ -66,8 +66,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onLogout,
   onStoreUpdated,
 }) => {
-  const [email, setEmail] = useState('admin@bpp-heritage.demo');
-  const [passcode, setPasscode] = useState('BPP-Admin-2026');
+  const [email, setEmail] = useState('');
+  const [passcode, setPasscode] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
     'orders' | 'raja_slots' | 'stock' | 'overview' | 'content'
@@ -370,14 +370,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </button>
           </form>
 
-          <div className="p-3.5 rounded-xl bg-[#F7F2E8] border border-[#E8E2D5] text-xs text-[#77717C] space-y-1">
-            <p className="font-semibold text-[#14100A]">
-              ข้อมูลบัญชีผู้ดูแล (กรอกไว้ให้อัตโนมัติ กดปุ่มเข้าสู่ระบบได้ทันที):
-            </p>
-            <p className="font-tabular">Email: admin@bpp-heritage.demo</p>
-            <p className="font-tabular">Passcode: BPP-Admin-2026</p>
           </div>
-        </div>
       </div>
     );
   }
