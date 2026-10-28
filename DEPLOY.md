@@ -13,7 +13,7 @@
 |---|---|
 | `FIREBASE_SERVICE_ACCOUNT` | เนื้อหาไฟล์ JSON ทั้งก้อน |
 | `FIREBASE_DATABASE_ID` | เว้นว่างถ้าใช้ฐานข้อมูล (default) |
-| `ADMIN_EMAIL` | อีเมลเข้าหลังบ้าน |
+| `ADMIN_USERNAME` | ชื่อผู้ใช้เข้าหลังบ้าน (ไม่ตั้ง = `adminbpp`) |
 | `ADMIN_PASSCODE` | รหัสผ่านยาวๆ เดายาก |
 | `ADMIN_TOKEN_SECRET` | สตริงสุ่มยาวๆ |
 

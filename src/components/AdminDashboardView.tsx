@@ -149,7 +149,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, passcode }),
+        body: JSON.stringify({ username: email, passcode }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -327,11 +327,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 htmlFor="admin-email"
                 className="block text-xs font-medium text-[#29222E] mb-1"
               >
-                อีเมลผู้ดูแลระบบ
+                ชื่อผู้ใช้ (User)
               </label>
               <input
                 id="admin-email"
-                type="email"
+                type="text"
+                autoComplete="username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

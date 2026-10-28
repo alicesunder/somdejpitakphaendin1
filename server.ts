@@ -175,7 +175,7 @@ function purgeExpiredRajaSlotHolds(): boolean {
 }
 
 // Admin session store (Server-side verification)
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@bpp-heritage.demo';
+const ADMIN_EMAIL = process.env.ADMIN_USERNAME || process.env.ADMIN_EMAIL || 'adminbpp'; // login user name
 // No hardcoded passcode: set ADMIN_PASSCODE in the environment. Outside production a
 // random one is generated per start and printed to the server console.
 let ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || '';
@@ -718,10 +718,10 @@ export function createApp() {
 
   // 6. Admin Authentication
   app.post('/api/admin/login', (req, res) => {
-    const { email, passcode } = req.body || {};
+    const { username, email, passcode } = req.body || {};
     if (
       ADMIN_PASSCODE &&
-      String(email || '').trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() &&
+      String(username ?? email ?? '').trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() &&
       String(passcode || '').trim() === ADMIN_PASSCODE
     ) {
       const token = signAdminToken(ADMIN_EMAIL);

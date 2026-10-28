@@ -1385,7 +1385,7 @@ function purgeExpiredRajaSlotHolds() {
   }
   return mutated;
 }
-var ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@bpp-heritage.demo";
+var ADMIN_EMAIL = process.env.ADMIN_USERNAME || process.env.ADMIN_EMAIL || "adminbpp";
 var ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || "";
 if (!ADMIN_PASSCODE && process.env.NODE_ENV !== "production") {
   ADMIN_PASSCODE = crypto.randomBytes(9).toString("base64url");
@@ -1810,8 +1810,8 @@ function createApp() {
     res.status(201).json({ success: true, inquiryId: inquiry.id });
   });
   app.post("/api/admin/login", (req, res) => {
-    const { email, passcode } = req.body || {};
-    if (ADMIN_PASSCODE && String(email || "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() && String(passcode || "").trim() === ADMIN_PASSCODE) {
+    const { username, email, passcode } = req.body || {};
+    if (ADMIN_PASSCODE && String(username ?? email ?? "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() && String(passcode || "").trim() === ADMIN_PASSCODE) {
       const token = signAdminToken(ADMIN_EMAIL);
       res.json({
         token,
