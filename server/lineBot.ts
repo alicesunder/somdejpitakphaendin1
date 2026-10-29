@@ -382,7 +382,8 @@ async function handleReservationSession(
           `ติดตามสถานะโดยพิมพ์ “ติดตาม ${order.orderNumber} 5678” โดยเปลี่ยน 5678 เป็นโทรศัพท์ 4 หลักท้ายของผู้จอง`,
         ].join('\n'),
       ),
-    ];  }
+    ];
+  }
 
   await deleteReservationSession(userId);
   return [textMessage('ขั้นตอนจองไม่ถูกต้อง ระบบยกเลิกขั้นตอนเดิมแล้ว กรุณาพิมพ์ “รายการพระ” เพื่อเริ่มใหม่ครับ')];
