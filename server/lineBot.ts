@@ -242,7 +242,7 @@ async function handleReservationSession(
       if (!options.length) {
         return [textMessage('ขณะนี้ยังไม่มีช่องทางชำระเงินที่เปิดใช้งานในระบบ กรุณาติดต่อเจ้าหน้าที่ก่อนยืนยันการจองครับ')];
       }
-      return [textMessageWithOptions('โปรดเลือกช่องทางชำระเงินครับ', options.concat([['ยกเลิกการจอง', 'ยกเลิก']]))];
+      return [textMessageWithOptions('โปรดเลือกช่องทางชำระเงินครับ', [...options, ['ยกเลิกการจอง', 'ยกเลิก'] as [string, string]])];
     }
     return [textMessageWithOptions('กรุณาเลือก “จัดส่งไปรษณีย์” หรือ “รับเองที่ บช.ตชด.” ครับ', [['จัดส่งไปรษณีย์', 'จัดส่ง'], ['รับเองที่ บช.ตชด.', 'รับเอง'], ['ยกเลิกการจอง', 'ยกเลิก']])];
   }
@@ -268,7 +268,7 @@ async function handleReservationSession(
     if (!options.length) {
       return [textMessage('ขณะนี้ยังไม่มีช่องทางชำระเงินที่เปิดใช้งานในระบบ กรุณาติดต่อเจ้าหน้าที่ก่อนยืนยันการจองครับ')];
     }
-    return [textMessageWithOptions('โปรดเลือกช่องทางชำระเงินครับ', options.concat([['ยกเลิกการจอง', 'ยกเลิก']]))];
+    return [textMessageWithOptions('โปรดเลือกช่องทางชำระเงินครับ', [...options, ['ยกเลิกการจอง', 'ยกเลิก'] as [string, string]])];
   }
 
   if (session.stage === 'payment') {
@@ -282,7 +282,7 @@ async function handleReservationSession(
       (method === 'promptpay' && /พร้อมเพย์/i.test(value)) ||
       (method === 'bank_transfer' && /โอนเงิน/i.test(value))
     )) {
-      return [textMessageWithOptions('กรุณาเลือกช่องทางชำระเงินจากตัวเลือกที่แสดงครับ', optionLabels.concat([['ยกเลิกการจอง', 'ยกเลิก']]))];
+      return [textMessageWithOptions('กรุณาเลือกช่องทางชำระเงินจากตัวเลือกที่แสดงครับ', [...optionLabels, ['ยกเลิกการจอง', 'ยกเลิก'] as [string, string]])];
     }
     session.paymentMethod = method;
     session.stage = 'confirm';
@@ -602,9 +602,8 @@ async function processText(rawText: string, store: BotStore, userId?: string): P
       return [textMessage('จำนวนจองต้องเป็นจำนวนเต็มตั้งแต่ 1 ถึง 100 ครับ')];
     }
     if (product.requiresNumberSelection || /^ช1$/i.test(product.code)) {
-      return [textMessageWithOptions(
-        'รายการ ช1 ชุดทองคำใหญ่ราชาฤกษ์ต้องเลือกหมายเลขประจำชุด 1–99 และตรวจสอบการล็อกเลขในเว็บไซต์ จึงต้องจองผ่านหน้าเว็บไซต์โดยตรงครับ',
-        [['ไปยังเว็บไซต์เพื่อเลือกเลข', siteUrl]],
+      return [textMessage(
+        `รายการ ช1 ชุดทองคำใหญ่ราชาฤกษ์ต้องเลือกหมายเลขประจำชุด 1–99 และตรวจสอบการล็อกเลขในเว็บไซต์ จึงต้องจองผ่านหน้าเว็บไซต์โดยตรงครับ\\n\\nเปิดเว็บไซต์: ${siteUrl}`,
       )];
     }
     if (!product.isMadeToOrder && quantity > product.stock) {
@@ -643,7 +642,7 @@ async function processText(rawText: string, store: BotStore, userId?: string): P
   if (/^(วิธีจอง|จองอย่างไร|ขั้นตอนจอง|วิธีสั่งจอง)$/i.test(text)) {
     return [
       textMessage(
-        'ขั้นตอนการจอง\\n• จองรายการทั่วไปผ่านแชต: พิมพ์ “จอง ชศ1 1” โดยเปลี่ยนเป็นรหัสและจำนวนที่ต้องการ แล้วทำตามขั้นตอน\\n• ช1 ชุดทองคำใหญ่ราชาฤกษ์ต้องจองบนเว็บไซต์เพื่อเลือกหมายเลข 1–99\\n• ติดตามสถานะ: พิมพ์ “ติดตาม BPP-2569-1234 5678” โดยเปลี่ยนเป็นเลขใบจองจริงและโทรศัพท์ 4 หลักท้าย\\n\\nระบบตรวจราคา สต็อก และบันทึกใบจองผ่าน API ของเว็บไซต์เดิม',
+        'ขั้นตอนการจอง\n• จองรายการทั่วไปผ่านแชต: พิมพ์ “จอง ชศ1 1” โดยเปลี่ยนเป็นรหัสและจำนวนที่ต้องการ แล้วทำตามขั้นตอน\n• ช1 ชุดทองคำใหญ่ราชาฤกษ์ต้องจองบนเว็บไซต์เพื่อเลือกหมายเลข 1–99\n• ติดตามสถานะ: พิมพ์ “ติดตาม BPP-2569-1234 5678” โดยเปลี่ยนเป็นเลขใบจองจริงและโทรศัพท์ 4 หลักท้าย\n\nระบบตรวจราคา สต็อก และบันทึกใบจองผ่าน API ของเว็บไซต์เดิม',
       ),
     ];
   }
