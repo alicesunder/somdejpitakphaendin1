@@ -1,12 +1,14 @@
 # LINE Chatbot setup — สมเด็จพิทักษ์แผ่นดิน ๗๕ ปี ตชด.
 
-This feature adds a LINE Messaging API webhook to the existing storefront. The website remains the system of record for products, stock and reservations.
+This feature adds a LINE Messaging API webhook to the existing storefront. The website remains the system of record for products, stock and reservations. Standard products can be reserved in a guided chat flow that submits the final order to the existing website checkout API; the special ช1 set stays on the website because it requires choosing a unique number from 1–99.
 
 ## What it does
 
 - Verifies every webhook with the LINE channel secret and the raw request body.
 - Replies to greeting/help, product-code and material/price searches, special-set searches, and reservation instructions.
 - Displays product cards using the live product data loaded by the existing store backend.
+- Starts a guided reservation flow for regular product codes via `จอง ชศ1 1` (replace the code and quantity). It collects name, telephone, unit/organization, delivery method, shipping address/postal code if applicable, and an enabled payment method, then asks for explicit confirmation.
+- Stores the user's in-progress reservation step in a `lineBotSessions` Firestore collection, with a two-hour idle expiry. No customer reservation is created until the user presses `ยืนยัน`.
 - Sends customers to the existing website to complete checkout, so the current checkout validation, stock handling and Firestore persistence remain authoritative.
 - Allows order tracking in chat using `ติดตาม BPP-2569-1234 5678` (replace with the customer's actual order number and last four phone digits).
 - Optionally sends a new-order notification to staff LINE user IDs.
@@ -45,7 +47,9 @@ A URI action can open the storefront directly. Rich-menu tab switching needs sep
 
 ## Important limitations for this first increment
 
-- Reservations are completed on the existing website checkout, not entirely inside the LINE chat. This prevents a second, competing order flow from bypassing the site's stock and checkout validation.
+- Guided chat reservations are supported for standard items and are submitted to the existing website `POST /api/orders` endpoint. The website remains authoritative for stock validation, order numbering, and persistence.
+- The special `ช1` set must be booked on the website because the buyer must select a unique number from 1–99; its number-locking logic is not replicated in chat.
+- If the webhook code is on a preview deployment, the preview host may be protected by Vercel SSO. Do not point LINE at the preview host or activate the production webhook until this feature is merged and deployed to the public production domain.
 - Staff notifications are optional and only work when `LINE_ADMIN_USER_IDS` is configured with LINE user IDs.
 - Product image cards include images only where an absolute HTTPS front-image URL is already stored. Relative website asset paths are intentionally omitted because LINE requires externally accessible image URLs.
 - This code does not take or store payment card details. Payment is handled by the website's configured reservation workflow.
