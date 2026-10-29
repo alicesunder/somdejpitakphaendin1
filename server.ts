@@ -35,6 +35,7 @@ import {
   createFirestoreStore,
   isFirestoreConfigured,
 } from './server/firestoreStore';
+import { createLineBotRouter, notifyLineAdminsNewOrder } from './server/lineBot';
 
 interface StoreData {
   siteConfig: SiteConfig;
@@ -271,7 +272,17 @@ function enrichRajaSlotsForAdmin(): RajaSetSlot[] {
 export function createApp() {
   const app = express();
 
-  app.use(express.json({ limit: '2mb' }));
+  app.use(
+    express.json({
+      limit: '2mb',
+      // LINE signatures must be checked against the untouched HTTP request body.
+      verify: (req, _res, buffer) => {
+        if (req.originalUrl.split('?')[0].endsWith('/api/line/webhook')) {
+          (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+        }
+      },
+    }),
+  );
 
   // Every API request is handled one at a time per instance: load the latest
   // data, run the handler, and persist any changes *before* the response is sent
@@ -293,7 +304,11 @@ export function createApp() {
         }
         if (firestoreStore) {
           const cols: ColName[] = [];
-          if (req.path.startsWith('/orders') || req.path.startsWith('/admin')) {
+          if (
+            req.path.startsWith('/orders') ||
+            req.path.startsWith('/admin') ||
+            req.path.startsWith('/line')
+          ) {
             cols.push('orders');
           }
           if (req.path.startsWith('/admin')) cols.push('inquiries');
@@ -324,6 +339,9 @@ export function createApp() {
       }
     });
   });
+
+  // LINE Messaging API webhook; checkout remains on the existing storefront.
+  app.use('/api/line', createLineBotRouter(store));
 
   // 1. Public Storefront Bootstrap
   app.get('/api/bootstrap', (_req, res) => {
@@ -653,6 +671,10 @@ export function createApp() {
       (newOrder as OrderRecord & { idempotencyKey?: string }).idempotencyKey = idempotencyKey;
     }
     saveStore(store);
+    // Notifications are best-effort and never block the website reservation flow.
+    void notifyLineAdminsNewOrder(newOrder).catch((err) => {
+      console.error('LINE new-order notification failed:', err);
+    });
 
     res.status(201).json({
       order: maskCustomerPII(newOrder),
