@@ -348,6 +348,26 @@ async function handleReservationSession(
     if (!order?.orderNumber) {
       return [textMessage(`ระบบรับคำขอแล้ว แต่ไม่พบเลขที่ใบจองในคำตอบ กรุณาตรวจสอบผ่านเว็บไซต์ ${siteUrl}`)];
     }
+    const paymentInstructions = session.paymentMethod === 'promptpay'
+      ? [
+          'ช่องทางชำระเงิน: พร้อมเพย์',
+          store.siteConfig.paymentChannels?.promptPayId
+            ? `หมายเลขพร้อมเพย์: ${store.siteConfig.paymentChannels.promptPayId}`
+            : 'โปรดตรวจสอบหมายเลขพร้อมเพย์จากเว็บไซต์',
+        ]
+      : [
+          'ช่องทางชำระเงิน: โอนเงินผ่านธนาคาร',
+          store.siteConfig.paymentChannels?.bankName
+            ? `ธนาคาร: ${store.siteConfig.paymentChannels.bankName}`
+            : '',
+          store.siteConfig.paymentChannels?.accountName
+            ? `ชื่อบัญชี: ${store.siteConfig.paymentChannels.accountName}`
+            : '',
+          store.siteConfig.paymentChannels?.accountNumber
+            ? `เลขบัญชี: ${store.siteConfig.paymentChannels.accountNumber}`
+            : '',
+        ].filter(Boolean);
+
     return [
       textMessage(
         [
@@ -356,12 +376,13 @@ async function handleReservationSession(
           `ยอดรวม: ${formatBaht(Number(order.grandTotal ?? 0))} บาท`,
           'สถานะการชำระเงิน: รอเจ้าหน้าที่ตรวจสอบ',
           '',
-          `ติดตามสถานะโดยพิมพ์ “ติดตาม ${order.orderNumber} โทรศัพท์ 4 หลักท้าย”`,
-          `รายละเอียดช่องทางชำระเงินและเงื่อนไขรับวัตถุมงคล โปรดตรวจสอบบนเว็บไซต์: ${siteUrl}`,
+          ...paymentInstructions,
+          `โปรดชำระตามยอดที่ระบุ และส่งหลักฐานตามช่องทางที่เว็บไซต์แจ้ง: ${siteUrl}`,
+          '',
+          `ติดตามสถานะโดยพิมพ์ “ติดตาม ${order.orderNumber} 5678” โดยเปลี่ยน 5678 เป็นโทรศัพท์ 4 หลักท้ายของผู้จอง`,
         ].join('\n'),
       ),
-    ];
-  }
+    ];  }
 
   await deleteReservationSession(userId);
   return [textMessage('ขั้นตอนจองไม่ถูกต้อง ระบบยกเลิกขั้นตอนเดิมแล้ว กรุณาพิมพ์ “รายการพระ” เพื่อเริ่มใหม่ครับ')];
