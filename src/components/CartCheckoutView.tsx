@@ -1,3 +1,5 @@
+import { BOOKING_CLOSED_MESSAGE } from '../config/booking';
+import { PaymentPanel } from './PaymentPanel';
 import React, { useMemo, useState } from 'react';
 import {
   AlertCircle,
@@ -33,8 +35,10 @@ import {
 } from '../utils/commerceRules';
 import { BppCrestLogo, SpecimenPlate } from './SacredArtwork';
 import { RajaNumberGridModal } from './RajaNumberGridModal';
+import LineContact from './LineContact';
 
 interface CartCheckoutViewProps {
+  bookingOpen: boolean;
   cart: CartItem[];
   products: AmuletProduct[];
   rajaSlots: RajaSetSlot[];
@@ -58,6 +62,7 @@ interface CartCheckoutViewProps {
 }
 
 export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
+  bookingOpen,
   cart,
   products,
   rajaSlots,
@@ -84,7 +89,6 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
     'promptpay' | 'bank_transfer'
   >('promptpay');
   const [selectedBank, setSelectedBank] = useState('ธนาคารกรุงไทย');
-  const [transferSlipRef, setTransferSlipRef] = useState('');
   const [showRajaModal, setShowRajaModal] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -118,6 +122,10 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
     e.preventDefault();
     if (submitting) return;
 
+    if (!bookingOpen) {
+      setErrorMsg(BOOKING_CLOSED_MESSAGE);
+      return;
+    }
     setErrorMsg(null);
     const cleanOrg = organization.trim();
 
@@ -132,13 +140,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
       deliveryMethod === 'pickup_bpp' ? '10400' : postalCode.trim();
 
     const effectiveTransferRef =
-      paymentMethod === 'bank_transfer'
-        ? transferSlipRef.trim()
-          ? `${selectedBank} (${transferSlipRef.trim()})`
-          : selectedBank
-        : transferSlipRef.trim()
-        ? `PromptPay QR (${transferSlipRef.trim()})`
-        : 'PromptPay QR';
+      paymentMethod === 'bank_transfer' ? selectedBank : 'PromptPay QR';
 
     const check = validateCheckoutForm({
       customerName,
@@ -273,6 +275,13 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
               </button>
             </div>
           </div>
+
+          <PaymentPanel
+            order={confirmedOrder}
+            phoneVerify={confirmedOrder.customerPhone || customerPhone}
+            channels={siteConfig.paymentChannels}
+            onOrderUpdated={(o) => setConfirmedOrder((prev) => (prev ? { ...prev, ...o, customerName: prev.customerName, organization: prev.organization, customerPhone: prev.customerPhone, shippingAddress: prev.shippingAddress } : o))}
+          />
 
           {/* Printable Formal Reservation Slip (ใบจองวัตถุมงคล) */}
           <div
@@ -796,6 +805,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
               </div>
             </section>
 
+            <LineContact variant="full" />
             {/* SECTION B: ฟอร์มจอง (ชื่อผู้จอง, หน่วยงาน, เบอร์โทรศัพท์, วันที่อัตโนมัติ) */}
             <section
               id="checkout-step-form"
@@ -1191,22 +1201,20 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                     )}
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="checkout-transfer-ref"
-                      className="block text-xs font-semibold text-[#E5C158] mb-1"
-                    >
-                      เลขอ้างอิงสลิป / เวลาที่โอนเงิน (ระบุเพื่อความรวดเร็วในการตรวจสอบ)
-                    </label>
-                    <input
-                      id="checkout-transfer-ref"
-                      type="text"
-                      value={transferSlipRef}
-                      onChange={(e) => setTransferSlipRef(e.target.value)}
-                      placeholder="เช่น โอนเวลา 14:30 น. / เลขท้ายสลิป 4 ตัว"
-                      className="w-full px-3.5 py-2 text-xs sm:text-sm border border-[#C9A45C]/50 rounded-xl bg-[#110D08] text-[#F7F2E8] placeholder-[#E5C158]/45 focus:outline-none focus:border-[#FCE694]"
-                    />
-                  </div>
+                  <ol className="rounded-xl border border-[#C9A45C]/40 bg-[#110D08]/90 p-4 text-xs text-[#F7F2E8]/85 space-y-2 list-none">
+                    <li className="flex gap-2.5">
+                      <span className="w-5 h-5 shrink-0 rounded-full bg-[#FCE694] text-[#18140E] font-bold flex items-center justify-center text-[11px]">1</span>
+                      <span>กด “ยืนยันการจอง” ระบบออกเลขที่ใบจองและล็อกรายการให้ทันที</span>
+                    </li>
+                    <li className="flex gap-2.5">
+                      <span className="w-5 h-5 shrink-0 rounded-full bg-[#FCE694] text-[#18140E] font-bold flex items-center justify-center text-[11px]">2</span>
+                      <span>หน้าถัดไปแสดง QR พร้อมเพย์ที่ใส่ยอดให้แล้ว (หรือเลขบัญชี) ให้โอนเงิน</span>
+                    </li>
+                    <li className="flex gap-2.5">
+                      <span className="w-5 h-5 shrink-0 rounded-full bg-[#FCE694] text-[#18140E] font-bold flex items-center justify-center text-[11px]">3</span>
+                      <span>อัปโหลดรูปสลิปในหน้าเดียวกัน หรือแนบภายหลังที่เมนู “ตรวจสอบสถานะ” ได้</span>
+                    </li>
+                  </ol>
 
                   {/* Live Summary Box inside Form */}
                   <div className="rounded-xl bg-[#110D08] border border-[#C9A45C]/50 p-4 space-y-1.5">
@@ -1245,10 +1253,12 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                   <div className="space-y-2">
                     <button
                       type="submit"
-                      disabled={submitting || !calculation.valid}
+                      disabled={submitting || !calculation.valid || !bookingOpen}
                       className="w-full py-3.5 px-6 rounded-xl btn-sacred-gold disabled:opacity-50 font-bold text-base transition-all"
                     >
-                      {submitting
+                      {!bookingOpen
+                        ? BOOKING_CLOSED_MESSAGE
+                        : submitting
                         ? 'กำลังสร้างเลขที่ใบจองอัตโนมัติ...'
                         : 'ยืนยันการจองและออกใบจอง (PDF)'}
                     </button>

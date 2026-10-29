@@ -461,10 +461,10 @@ export const SpecimenPlate: React.FC<SpecimenPlateProps> = ({
           <div className="flex items-center gap-2.5 bg-[#18130B]/95 border border-[#C9A45C]/60 rounded-lg px-3 py-2 shadow-lg">
             <BppCrestLogo className="w-7 h-7" />
             <div className="min-w-0">
-              <p className="text-xs font-bold text-[#FCE694] truncate">
+              <p className="text-xs font-bold text-[#FCE694] break-words min-w-0">
                 จารึกอักขระมงคลและตราสัญลักษณ์ประจำรุ่น
               </p>
-              <p className="text-[11px] text-[#E5C158]/90 font-tabular truncate">
+              <p className="text-[11px] text-[#E5C158]/90 font-tabular break-words min-w-0">
                 วาระที่ระลึก พ.ศ. {yearBE} · รหัส {code}
               </p>
             </div>
@@ -515,52 +515,31 @@ export const SpecimenPlate: React.FC<SpecimenPlateProps> = ({
   );
 };
 
+export const CEREMONY_PHOTO_PATH = '/assets/altar-ceremony.jpg';
+
+/** Ceremony altar photo, graded to the site's warm yellow-gold tone. */
 export const CeremonySplitBannerArt: React.FC<{
   className?: string;
   photoOnly?: boolean;
-}> = ({ className = 'relative', photoOnly = false }) => {
+}> = ({ className = 'relative' }) => {
   return (
-    <div className={`overflow-hidden bg-[#14100A] ${className}`}>
-      <svg
-        viewBox={photoOnly ? '12 746 125 150' : '12 746 348 150'}
-        preserveAspectRatio="xMidYMid slice"
-        className="w-full h-full object-cover block"
-      >
-        <defs>
-          <filter id="ceremonyGoldGrade" colorInterpolationFilters="sRGB">
-            <feColorMatrix
-              type="matrix"
-              values="
-                0.78 0.22 0.08 0 0.02
-                0.65 0.22 0.07 0 0.01
-                0.38 0.14 0.05 0 0.00
-                0    0    0    1 0
-              "
-            />
-          </filter>
-          <linearGradient id="ceremonyRightMask" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#14100A" stopOpacity="0" />
-            <stop offset="18%" stopColor="#14100A" stopOpacity="0.96" />
-            <stop offset="40%" stopColor="#110D08" stopOpacity="1" />
-            <stop offset="100%" stopColor="#0C0906" stopOpacity="1" />
-          </linearGradient>
-        </defs>
-        <image
-          href={REF_IMAGE_PATH}
-          width="1536"
-          height="1024"
-          filter="url(#ceremonyGoldGrade)"
-        />
-        {!photoOnly && (
-          <rect
-            x="112"
-            y="746"
-            width="248"
-            height="150"
-            fill="url(#ceremonyRightMask)"
-          />
-        )}
-      </svg>
+    <div className={`relative overflow-hidden bg-[#14100A] ${className}`}>
+      <img
+        src={CEREMONY_PHOTO_PATH}
+        alt="โต๊ะหมู่บูชาและเทียนชัยในพิธีพลีมวลสาร สมเด็จพิทักษ์แผ่นดิน"
+        loading="lazy"
+        decoding="async"
+        className="w-full h-full object-cover object-center block [filter:sepia(0.8)_saturate(1.35)_hue-rotate(-6deg)_brightness(0.92)_contrast(1.05)]"
+      />
+      {/* Warm gold wash + soft vignette */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[#C9A45C]/25 mix-blend-soft-light"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_100%_at_50%_45%,transparent_55%,rgba(10,8,5,0.55)_100%)]"
+      />
     </div>
   );
 };

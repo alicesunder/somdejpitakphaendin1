@@ -445,11 +445,11 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
                       <span className="block text-[10px] font-tabular text-[#E5C158]">
                         รหัส {item.code} · {item.categoryLabel}
                       </span>
-                      <h3 className="font-serif-heritage text-sm font-bold text-[#FFFFFF] truncate">
+                      <h3 className="font-serif-heritage text-sm font-bold text-[#FFFFFF] break-words min-w-0">
                         <button
                           type="button"
                           onClick={() => onSelectProduct(item.id)}
-                          className="text-left hover:text-[#FCE694] transition-colors truncate block w-full"
+                          className="text-left hover:text-[#FCE694] transition-colors break-words min-w-0 block w-full"
                         >
                           {item.name}
                         </button>
@@ -700,10 +700,10 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
                       </span>
                     </div>
                     <div className="p-2.5">
-                      <p className="text-xs font-bold text-[#FCE694] line-clamp-1">
+                      <p className="text-xs font-bold text-[#FCE694] break-words">
                         {sheet.title}
                       </p>
-                      <p className="text-[10px] text-[#F7F2E8]/80 line-clamp-1 mt-0.5">
+                      <p className="text-[10px] text-[#F7F2E8]/80 break-words mt-0.5">
                         {sheet.highlight}
                       </p>
                     </div>
@@ -803,7 +803,7 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
 
                         <div className="p-4 space-y-1.5">
                           <div className="flex items-center justify-between gap-2 text-[11px] font-tabular">
-                            <span className="text-[#E5C158] font-semibold truncate">
+                            <span className="text-[#E5C158] font-semibold break-words min-w-0">
                               {item.categoryLabel}
                             </span>
                             <span
@@ -823,7 +823,7 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
                             </span>
                           </div>
 
-                          <h2 className="font-serif-heritage text-base sm:text-lg font-bold text-[#FFFFFF] group-hover:text-[#FCE694] transition-colors line-clamp-1">
+                          <h2 className="font-serif-heritage text-base sm:text-lg font-bold text-[#FFFFFF] group-hover:text-[#FCE694] transition-colors break-words">
                             <button
                               type="button"
                               onClick={() => onSelectProduct(item.id)}
@@ -833,7 +833,7 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
                             </button>
                           </h2>
 
-                          <p className="text-xs text-[#E5C158]/90 line-clamp-1">
+                          <p className="text-xs text-[#E5C158]/90 break-words">
                             {item.material}
                           </p>
                         </div>

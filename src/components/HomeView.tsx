@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
+import { Fireflies } from './Fireflies';
 import {
   ArrowRight,
+  CalendarDays,
+  ClipboardCheck,
+  Store,
   ChevronLeft,
   ChevronRight,
   Expand,
@@ -25,7 +29,6 @@ import {
 } from '../data/seedData';
 import {
   BppCrestLogo,
-  CeremonySplitBannerArt,
   HeroSacredScene,
   MissionSplitBannerArt,
   NewsThumbnailArt,
@@ -108,6 +111,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#060503]/75 to-transparent"
         />
 
+        {/* Fireflies: drifting, blinking golden lights */}
+        <Fireflies className="pointer-events-none absolute inset-0 w-full h-full" />
+
         {/* Delicate Gold Sanctuary Frame */}
         <div
           aria-hidden="true"
@@ -118,9 +124,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         {/* Main Hero Focal Content — Clean, Uncluttered, Monumental */}
         <div className="relative z-10 w-full max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-16 sm:py-24">
-          <div className="max-w-3xl space-y-6 sm:space-y-8 animate-sacred-reveal">
+          <div className="max-w-3xl space-y-6 sm:space-y-8">
             {/* Official BPP Crest & Subtle Kicker */}
-            <div className="flex items-center gap-4">
+            <div
+              className="hero-rise flex items-center gap-4"
+              style={{ "--d": "0ms" } as React.CSSProperties}
+            >
               <BppCrestLogo className="w-16 h-14 sm:w-20 sm:h-18 drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)]" />
               <div className="h-10 w-[1px] bg-gradient-to-b from-transparent via-[#FCE694]/60 to-transparent" />
               <p className="font-bpp-motto text-xl sm:text-2xl lg:text-3xl font-bold text-[#FCE694] tracking-wider drop-shadow-[0_4px_14px_rgba(0,0,0,0.95)]">
@@ -129,9 +138,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
 
             {/* Monumental Hero Centerpiece Typography */}
-            <div className="space-y-3 sm:space-y-4">
+            <div
+              className="hero-rise space-y-3 sm:space-y-4"
+              style={{ "--d": "160ms" } as React.CSSProperties}
+            >
               <h1 className="font-bpp-official font-bold tracking-wide drop-shadow-[0_18px_40px_rgba(0,0,0,0.98)]">
-                <span className="block text-5xl sm:text-7xl lg:text-[5.6rem] leading-[1.1] text-gold-shimmer sm:whitespace-nowrap">
+                <span className="block text-5xl sm:text-7xl lg:text-[5.6rem] leading-[1.1] text-gold-shimmer text-balance">
                   สมเด็จพิทักษ์แผ่นดิน
                 </span>
                 <span className="block text-3xl sm:text-5xl lg:text-[3.5rem] leading-[1.18] text-[#FCE694] mt-2 sm:mt-3">
@@ -147,11 +159,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
 
             {/* Clean, Minimalist Primary Actions */}
-            <div className="pt-2 flex flex-wrap items-center gap-4">
+            <div
+              className="hero-rise pt-2 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4"
+              style={{ "--d": "340ms" } as React.CSSProperties}
+            >
               <button
                 type="button"
                 onClick={() => onNavigate('catalog')}
-                className="btn-sacred-gold px-8 py-4 rounded-xl font-bpp-official font-bold text-xl sm:text-2xl tracking-wide flex items-center gap-3 shadow-[0_18px_40px_rgba(0,0,0,0.9),0_0_28px_rgba(229,193,88,0.35)] whitespace-nowrap"
+                className="btn-sacred-gold w-full sm:w-auto justify-center px-8 py-4 rounded-xl font-bpp-official font-bold text-xl sm:text-2xl tracking-wide flex items-center gap-3 shadow-[0_18px_40px_rgba(0,0,0,0.9),0_0_28px_rgba(229,193,88,0.35)] whitespace-nowrap"
               >
                 <span>สั่งจองวัตถุมงคล</span>
                 <ArrowRight className="w-5 h-5" />
@@ -161,7 +176,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onSelectProduct(rajaProduct.id)}
-                  className="px-6 py-4 rounded-xl bg-[#0E0B07]/85 border border-[#FCE694]/70 text-[#FCE694] hover:bg-[#1E170E] hover:border-[#FCE694] font-bpp-official font-bold text-lg sm:text-xl tracking-wide shadow-[0_14px_32px_rgba(0,0,0,0.85)] transition-all flex items-center gap-2.5 whitespace-nowrap backdrop-blur-md"
+                  className="w-full sm:w-auto justify-center px-6 py-4 rounded-xl bg-[#0E0B07]/85 border border-[#FCE694]/70 text-[#FCE694] hover:bg-[#1E170E] hover:border-[#FCE694] font-bpp-official font-bold text-lg sm:text-xl tracking-wide shadow-[0_14px_32px_rgba(0,0,0,0.85)] transition-all flex items-center gap-2.5 whitespace-nowrap backdrop-blur-md"
                 >
                   <Grid className="w-4 h-4 text-[#FCE694]" />
                   <span>เลือกหมายเลข ช1 (๑–๙๙)</span>
@@ -169,6 +184,85 @@ export const HomeView: React.FC<HomeViewProps> = ({
               )}
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* MOBILE QUICK ACTIONS — app-style shortcuts + how-to steps (phones only) */}
+      <section
+        aria-label="ทางลัดและขั้นตอนการสั่งจอง"
+        className="md:hidden bg-[#0B0906] border-b border-[#C9A45C]/30 px-4 py-6 space-y-6"
+      >
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            {
+              label: 'สั่งจองวัตถุมงคล',
+              sub: 'ดูครบทุกรายการ',
+              Icon: Store,
+              onClick: () => onNavigate('catalog'),
+            },
+            {
+              label: 'เลือกเลข ช1',
+              sub: 'หมายเลข 1–99',
+              Icon: Grid,
+              onClick: () =>
+                rajaProduct ? onSelectProduct(rajaProduct.id) : onNavigate('catalog'),
+            },
+            {
+              label: 'ตรวจสอบใบจอง',
+              sub: 'ใช้เลขที่ใบจอง',
+              Icon: ClipboardCheck,
+              onClick: () => onNavigate('tracking'),
+            },
+            {
+              label: 'กำหนดการพิธี',
+              sub: 'ข่าวสารและโปสเตอร์',
+              Icon: CalendarDays,
+              onClick: () => onNavigate('news'),
+            },
+          ].map(({ label, sub, Icon, onClick }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={onClick}
+              className="min-h-[104px] rounded-2xl border border-[#C9A45C]/55 bg-gradient-to-br from-[#1E170D] to-[#0F0B07] p-4 text-left flex flex-col justify-between gap-3 shadow-[0_10px_24px_rgba(0,0,0,0.6)] active:scale-[0.97] transition-transform"
+            >
+              <span className="w-10 h-10 rounded-full bg-[#2B2112] border border-[#FCE694]/50 flex items-center justify-center">
+                <Icon className="w-5 h-5 text-[#FCE694]" />
+              </span>
+              <span>
+                <span className="block text-base font-bold text-[#FCE694] leading-tight">
+                  {label}
+                </span>
+                <span className="block text-xs text-[#F7F2E8]/70 mt-0.5">{sub}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div>
+          <h2 className="text-sm font-bold tracking-wide text-[#E5C158] mb-3">
+            สั่งจองง่าย ๆ ใน 3 ขั้นตอน
+          </h2>
+          <ol className="space-y-2.5">
+            {[
+              ['เลือกวัตถุมงคล', 'เลือกชุดหรือเนื้อพระที่ต้องการ ใส่ตะกร้า'],
+              ['กรอกข้อมูลผู้จอง', 'ชื่อ เบอร์โทร และวิธีรับของ'],
+              ['รับใบจอง (PDF)', 'ระบบออกเลขที่ใบจองให้ทันที เก็บไว้ตรวจสอบสถานะ'],
+            ].map(([title, desc], i) => (
+              <li
+                key={title}
+                className="flex items-start gap-3 rounded-xl bg-[#14100A] border border-[#C9A45C]/25 p-3"
+              >
+                <span className="font-tabular shrink-0 w-8 h-8 rounded-full bg-gradient-to-b from-[#FCE694] to-[#C69635] text-[#0E0B07] font-bold flex items-center justify-center">
+                  {i + 1}
+                </span>
+                <span>
+                  <span className="block text-[15px] font-bold text-[#F7F2E8]">{title}</span>
+                  <span className="block text-xs text-[#F7F2E8]/70 leading-relaxed">{desc}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
 
@@ -372,7 +466,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                           <span>รหัส {item.code}</span>
                           <span>พ.ศ. {item.yearBE}</span>
                         </div>
-                        <h3 className="font-serif-heritage text-sm sm:text-base font-bold text-[#FFFFFF] line-clamp-1 group-hover:text-[#FCE694] transition-colors">
+                        <h3 className="font-serif-heritage text-sm sm:text-base font-bold text-[#FFFFFF] break-words group-hover:text-[#FCE694] transition-colors">
                           <button
                             type="button"
                             onClick={() => onSelectProduct(item.id)}
@@ -381,7 +475,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             {item.name}
                           </button>
                         </h3>
-                        <p className="text-xs text-[#E5C158]/85 line-clamp-1">
+                        <p className="text-xs text-[#E5C158]/85 break-words">
                           {item.material}
                         </p>
                       </div>
@@ -613,7 +707,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                   aria-hidden="true"
                                   className="w-1.5 h-1.5 rotate-45 bg-[#FCE694] shrink-0"
                                 />
-                                <span className="truncate font-medium">
+                                <span className="break-words min-w-0 font-medium">
                                   {b.item}
                                 </span>
                               </div>
@@ -715,7 +809,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         <span className="text-[10px] font-tabular font-bold text-[#E5C158]">
                           เนื้อที่ {idx + 1} · {mat.code}
                         </span>
-                        <p className="font-serif-heritage text-xs font-bold text-[#FFFFFF] group-hover:text-[#FCE694] line-clamp-1">
+                        <p className="font-serif-heritage text-xs font-bold text-[#FFFFFF] group-hover:text-[#FCE694] break-words">
                           {mat.name
                             .replace('สมเด็จพิทักษ์แผ่นดิน พิมพ์นิยม ', '')
                             .replace('สมเด็จพิทักษ์แผ่นดิน ', '')}
@@ -779,10 +873,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   </button>
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-[#FCE694] truncate">
+                      <p className="text-xs font-bold text-[#FCE694] break-words min-w-0">
                         {SOMDEJ_BROCHURE_PAGES[activeBrochureSheetIdx].title}
                       </p>
-                      <p className="text-[11px] text-[#F7F2E8]/80 truncate">
+                      <p className="text-[11px] text-[#F7F2E8]/80 break-words min-w-0">
                         {SOMDEJ_BROCHURE_PAGES[activeBrochureSheetIdx].subtitle}
                       </p>
                     </div>
@@ -813,31 +907,40 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <section className="py-10 sm:py-14 bg-[#080705] border-t border-[#C9A45C]/25">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
-            {/* Left Diptych Panel: พิธีพุทธาภิเษก */}
+            {/* Left Diptych Panel: พิธีพุทธาภิเษก — photo on top (mobile) / full-bleed with caption (desktop) */}
             <div
               style={{ '--stagger-index': 0 } as React.CSSProperties}
-              className="group relative sacred-stagger-reveal rounded-2xl overflow-hidden border border-[#C9A45C]/65 min-h-[280px] sm:min-h-[320px] flex items-end sm:items-center justify-end p-6 sm:p-9 shadow-[0_24px_50px_rgba(0,0,0,0.85)]"
+              className="group relative sacred-stagger-reveal rounded-2xl overflow-hidden border border-[#C9A45C]/65 bg-[#0D0A06] shadow-[0_24px_50px_rgba(0,0,0,0.85)] flex flex-col lg:block lg:min-h-[420px]"
             >
-              <CeremonySplitBannerArt className="absolute inset-0 w-full h-full transition-transform duration-700 group-hover:scale-105" />
+              <div className="relative aspect-[4/3] sm:aspect-[16/9] lg:aspect-auto lg:absolute lg:inset-0 overflow-hidden">
+                <img
+                  src="/assets/ceremony-buddhabhisek.jpg"
+                  alt="พระเกจิอาจารย์ประกอบพิธีพุทธาภิเษกต่อหน้าเจ้าหน้าที่ ตชด."
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-full object-cover object-[45%_30%] transition-transform duration-700 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0D0A06] via-[#0D0A06]/10 to-transparent lg:from-[#0D0A06]/95 lg:via-[#0D0A06]/72 lg:to-[#0D0A06]/40" />
+              </div>
               <ThaiCornerBrackets colorClass="text-[#FCE694]/55" />
-              <div className="relative z-10 max-w-[270px] sm:max-w-[310px] text-center sm:text-left space-y-3">
-                <p className="text-xs font-semibold tracking-wider text-[#E5C158]">
+              <div className="relative z-10 p-5 sm:p-7 lg:absolute lg:inset-x-0 lg:bottom-0 lg:p-9 space-y-3 text-left">
+                <p className="text-xs sm:text-sm font-semibold tracking-wider text-[#E5C158]">
                   พิธีกรรมตามแบบแผนประเพณีโบราณ
                 </p>
-                <h2 className="font-serif-heritage text-2xl sm:text-3xl font-bold text-[#FCE694] drop-shadow">
+                <h2 className="font-serif-heritage text-2xl sm:text-3xl font-bold text-[#FCE694] leading-snug drop-shadow">
                   พิธีพลีมวลสารและพุทธาภิเษก
                 </h2>
-                <p className="text-xs sm:text-sm text-[#F7F2E8]/95 leading-relaxed">
+                <p className="text-sm text-[#F7F2E8]/95 leading-relaxed lg:max-w-md">
                   จัดสร้างตามประเพณีโบราณ โดยพระเกจิอาจารย์ผู้ทรงคุณวุฒิ จากวัดชั้นนำทั่วประเทศ
                 </p>
                 <div className="pt-1">
                   <button
                     type="button"
                     onClick={() => onNavigate('news')}
-                    className="btn-sacred-gold px-5 py-2.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5"
+                    className="btn-sacred-gold w-full sm:w-auto min-h-[48px] px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-2"
                   >
                     <span>ดูกำหนดการพิธีทั้งหมด</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -846,28 +949,29 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {/* Right Diptych Panel: รายได้สมทบภารกิจ */}
             <div
               style={{ '--stagger-index': 1 } as React.CSSProperties}
-              className="group relative sacred-stagger-reveal rounded-2xl overflow-hidden border border-[#C9A45C]/65 min-h-[280px] sm:min-h-[320px] flex items-end sm:items-center justify-end p-6 sm:p-9 shadow-[0_24px_50px_rgba(0,0,0,0.85)]"
+              className="group relative sacred-stagger-reveal rounded-2xl overflow-hidden border border-[#C9A45C]/65 min-h-[300px] sm:min-h-[340px] lg:min-h-[420px] flex items-end p-5 sm:p-8 lg:p-9 shadow-[0_24px_50px_rgba(0,0,0,0.85)]"
             >
               <MissionSplitBannerArt className="absolute inset-0 w-full h-full transition-transform duration-700 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0D0A06]/90 via-[#0D0A06]/45 to-transparent sm:bg-gradient-to-l sm:from-[#0D0A06]/80 sm:via-[#0D0A06]/30" />
               <ThaiCornerBrackets colorClass="text-[#FCE694]/55" />
-              <div className="relative z-10 max-w-[270px] sm:max-w-[310px] text-center sm:text-left space-y-3 drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]">
-                <p className="text-xs font-semibold tracking-wider text-[#FCE694]">
+              <div className="relative z-10 w-full sm:ml-auto sm:max-w-[340px] text-left space-y-3 drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]">
+                <p className="text-xs sm:text-sm font-semibold tracking-wider text-[#FCE694]">
                   กองทุนเพื่อการศึกษาและสวัสดิการชายแดน
                 </p>
-                <h2 className="font-serif-heritage text-2xl sm:text-3xl font-bold text-[#FCE694] drop-shadow">
+                <h2 className="font-serif-heritage text-2xl sm:text-3xl font-bold text-[#FCE694] leading-snug drop-shadow">
                   รายได้สมทบภารกิจ ตชด.
                 </h2>
-                <p className="text-xs sm:text-sm text-[#F7F2E8] leading-relaxed">
+                <p className="text-sm text-[#F7F2E8] leading-relaxed">
                   เพื่อการศึกษา สาธารณสุข และพัฒนาคุณภาพชีวิต ของเยาวชนในพื้นที่ห่างไกล
                 </p>
                 <div className="pt-1">
                   <button
                     type="button"
                     onClick={() => onNavigate('about')}
-                    className="btn-sacred-gold px-5 py-2.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5"
+                    className="btn-sacred-gold w-full sm:w-auto min-h-[48px] px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-2"
                   >
                     <span>อ่านประวัติและภารกิจ</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -937,15 +1041,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <div className="p-4 space-y-2 flex-1 flex flex-col justify-between">
                       <div className="space-y-1.5">
                         {article.presidingMonk && (
-                          <p className="text-[11px] font-bold text-[#E5C158] truncate">
+                          <p className="text-[11px] font-bold text-[#E5C158] break-words min-w-0">
                             {article.presidingMonk}
                           </p>
                         )}
-                        <h3 className="font-serif-heritage text-sm sm:text-base font-bold text-[#FFFFFF] group-hover:text-[#FCE694] line-clamp-2 leading-snug">
+                        <h3 className="font-serif-heritage text-sm sm:text-base font-bold text-[#FFFFFF] group-hover:text-[#FCE694] break-words leading-snug">
                           {article.title}
                         </h3>
                         {article.eventLocation && (
-                          <p className="text-xs text-[#F7F2E8]/80 line-clamp-2 leading-relaxed">
+                          <p className="text-xs text-[#F7F2E8]/80 break-words leading-relaxed">
                             {article.eventLocation}
                           </p>
                         )}
@@ -989,7 +1093,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onSelectNews(news[3].id)}
-                    className="text-xs font-bold text-[#FFFFFF] hover:text-[#FCE694] text-left line-clamp-2 leading-snug"
+                    className="text-xs font-bold text-[#FFFFFF] hover:text-[#FCE694] text-left break-words leading-snug"
                   >
                     {news[3].title} →
                   </button>

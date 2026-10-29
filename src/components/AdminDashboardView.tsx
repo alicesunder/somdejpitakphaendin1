@@ -1,3 +1,4 @@
+import { AdminNewOrderModal } from './AdminNewOrderModal';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
@@ -77,6 +78,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     null
   );
   const [loading, setLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
   const [slotFilter, setSlotFilter] = useState<'all' | 'booked' | 'available'>('all');
 
@@ -100,6 +102,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
   const fetchDashboard = async (tokenToUse: string) => {
     setLoading(true);
+    setDashboardError(null);
     try {
       const res = await fetch('/api/admin/dashboard', {
         headers: { Authorization: `Bearer ${tokenToUse}` },
@@ -108,11 +111,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         onLogout();
         return;
       }
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      // Only accept a real dashboard payload; an error body must never be treated as data.
+      if (!res.ok || !data || !Array.isArray(data.orders) || !data.metrics) {
+        setDashboardData(null);
+        setDashboardError(
+          (data && data.error) || 'โหลดข้อมูลหลังบ้านไม่สำเร็จ กรุณาลองอีกครั้ง',
+        );
+        return;
+      }
       setDashboardData(data);
       setConfigDraft(data.siteConfig);
     } catch {
-      // handled gracefully
+      setDashboardData(null);
+      setDashboardError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองอีกครั้ง');
     } finally {
       setLoading(false);
     }
@@ -236,7 +248,64 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     showToast('ลบรายการวัตถุมงคลออกจากระบบแล้ว');
   };
 
+  const [slipView, setSlipView] = useState<{ state: 'none' | 'loading' | 'ready' | 'error'; dataUrl?: string; message?: string }>({ state: 'none' });
+  const [slipZoom, setSlipZoom] = useState(false);
+  const [newOrderOpen, setNewOrderOpen] = useState(false);
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderFilter, setOrderFilter] = useState<'all' | 'slip_wait' | 'no_slip' | 'paid' | 'rejected'>('all');
+
+  const orderCounts = useMemo(() => {
+    const list = dashboardData?.orders || [];
+    return {
+      all: list.length,
+      slip_wait: list.filter((o) => o.paymentStatus === 'pending_verification' && o.slipUploadedAt).length,
+      no_slip: list.filter((o) => o.paymentStatus === 'pending_verification' && !o.slipUploadedAt).length,
+      paid: list.filter((o) => o.paymentStatus === 'verified_paid').length,
+      rejected: list.filter((o) => o.paymentStatus === 'payment_rejected').length,
+    };
+  }, [dashboardData?.orders]);
+
+  const filteredOrders = useMemo(() => {
+    const q = orderSearch.trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, '');
+    return (dashboardData?.orders || []).filter((o) => {
+      if (orderFilter === 'slip_wait' && !(o.paymentStatus === 'pending_verification' && o.slipUploadedAt)) return false;
+      if (orderFilter === 'no_slip' && !(o.paymentStatus === 'pending_verification' && !o.slipUploadedAt)) return false;
+      if (orderFilter === 'paid' && o.paymentStatus !== 'verified_paid') return false;
+      if (orderFilter === 'rejected' && o.paymentStatus !== 'payment_rejected') return false;
+      if (!q) return true;
+      return (
+        o.orderNumber.toLowerCase().includes(q) ||
+        o.customerName.toLowerCase().includes(q) ||
+        (o.organization || '').toLowerCase().includes(q) ||
+        (qDigits.length >= 3 && o.customerPhone.replace(/\D/g, '').includes(qDigits)) ||
+        (o.selectedNumbers || []).some((n) => String(n) === q.replace('#', ''))
+      );
+    });
+  }, [dashboardData?.orders, orderSearch, orderFilter]);
+
+  const loadSlip = async (order: OrderRecord) => {
+    if (!adminToken) return;
+    setSlipView({ state: 'loading' });
+    try {
+      const res = await fetch(`/api/admin/orders/${order.id}/slip`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSlipView({ state: 'error', message: data.error || 'เปิดสลิปไม่สำเร็จ' });
+        return;
+      }
+      setSlipView({ state: 'ready', dataUrl: data.dataUrl });
+    } catch {
+      setSlipView({ state: 'error', message: 'เชื่อมต่อระบบไม่ได้' });
+    }
+  };
+
   const handleOpenOrderModal = (order: OrderRecord) => {
+    setSlipView({ state: 'none' });
+    setSlipZoom(false);
+    if (order.slipUploadedAt) void loadSlip(order);
     setSelectedOrder(order);
     setOrderPaymentStatus(order.paymentStatus);
     setOrderPrepStatus(order.preparationStatus);
@@ -248,6 +317,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const handleUpdateOrderStatus = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminToken || !selectedOrder) return;
+    if (
+      orderPaymentStatus === 'payment_rejected' &&
+      selectedOrder.paymentStatus !== 'payment_rejected' &&
+      !window.confirm(`ยืนยันยกเลิกใบจอง ${selectedOrder.orderNumber}?\nระบบจะปล่อยเลข 1–99 และคืนสต็อกทันที ย้อนกลับไม่ได้`)
+    ) {
+      return;
+    }
 
     const res = await fetch(`/api/admin/orders/${selectedOrder.id}/status`, {
       method: 'PATCH',
@@ -575,8 +651,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       </div>
 
       {loading || !dashboardData ? (
-        <div className="bg-[#FFFFFF] border border-[#E8E2D5] rounded-xl p-12 text-center text-sm text-[#77717C]">
-          กำลังโหลดข้อมูลหลังบ้าน...
+        <div className="bg-[#FFFFFF] border border-[#E8E2D5] rounded-xl p-12 text-center text-sm text-[#77717C] space-y-4">
+          {!loading && dashboardError ? (
+            <>
+              <p className="text-red-700 font-semibold">{dashboardError}</p>
+              <button
+                type="button"
+                onClick={() => adminToken && fetchDashboard(adminToken)}
+                className="px-5 py-2.5 rounded-xl bg-[#14100A] text-[#FCE694] font-bold text-sm"
+              >
+                ลองโหลดใหม่
+              </button>
+            </>
+          ) : (
+            <p>กำลังโหลดข้อมูลหลังบ้าน...</p>
+          )}
         </div>
       ) : (
         <>
@@ -608,6 +697,48 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </button>
               </div>
 
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewOrderOpen(true)}
+                  className="px-4 py-2.5 min-h-[44px] rounded-xl bg-[#8A6D2F] text-white text-sm font-bold hover:bg-[#6F5724]"
+                >
+                  + สร้างใบจองใหม่ (ขายหน้าร้าน / โทร / LINE)
+                </button>
+                <input
+                  type="search"
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  placeholder="ค้นหา เลขที่ใบจอง / ชื่อ / เบอร์โทร / หน่วยงาน / เลข #"
+                  aria-label="ค้นหาใบจอง"
+                  className="flex-1 min-w-[220px] px-3 py-2.5 min-h-[44px] text-sm border border-[#E8E2D5] rounded-xl bg-white"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="กรองสถานะ">
+                {([
+                  ['all', 'ทั้งหมด'],
+                  ['slip_wait', '📎 แนบสลิปแล้ว รอตรวจ'],
+                  ['no_slip', 'ยังไม่แนบสลิป'],
+                  ['paid', 'ชำระแล้ว'],
+                  ['rejected', 'ยกเลิก'],
+                ] as const).map(([k, l]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    aria-pressed={orderFilter === k}
+                    onClick={() => setOrderFilter(k)}
+                    className={`px-3.5 py-2 min-h-[40px] rounded-full text-xs font-bold border ${
+                      orderFilter === k ? 'bg-[#14100A] text-[#FCE694] border-[#14100A]' : 'bg-white text-[#29222E] border-[#E8E2D5] hover:border-[#14100A]'
+                    }`}
+                  >
+                    {l} ({orderCounts[k]})
+                  </button>
+                ))}
+              </div>
+              {filteredOrders.length === 0 && (
+                <p className="text-sm text-[#77717C] py-6 text-center">ไม่พบใบจองที่ตรงกับเงื่อนไข</p>
+              )}
+
               <div className="bg-[#FFFFFF] border border-[#E8E2D5] rounded-xl overflow-x-auto shadow-xs">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
@@ -621,7 +752,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E8E2D5]">
-                    {dashboardData.orders.map((ord) => (
+                    {filteredOrders.map((ord) => (
                       <tr key={ord.id} className="hover:bg-[#F7F2E8]/40">
                         <td className="p-3.5 align-top">
                           <p className="font-tabular font-bold text-[#14100A]">
@@ -631,6 +762,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             {ord.reservationDateThai ||
                               formatThaiDate(ord.createdAt)}
                           </p>
+                          {ord.salesChannel === 'admin' && (
+                            <span className="mt-1 inline-block px-1.5 py-0.5 rounded bg-[#EFE6CF] text-[#6F5724] text-[10px] font-bold">เจ้าหน้าที่สร้างให้</span>
+                          )}
                         </td>
 
                         <td className="p-3.5 align-top space-y-0.5">
@@ -708,6 +842,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                               ? 'ยกเลิกใบจอง (ปล่อยเลขแล้ว)'
                               : 'รอตรวจสอบการชำระเงิน'}
                           </span>
+                          {ord.slipUploadedAt && ord.paymentStatus === 'pending_verification' && (
+                            <span className="mt-1 block text-[11px] font-bold text-sky-800">📎 แนบสลิปแล้ว — รอตรวจ</span>
+                          )}
+                          {!ord.slipUploadedAt && ord.paymentStatus === 'pending_verification' && (
+                            <span className="mt-1 block text-[11px] text-[#77717C]">ยังไม่แนบสลิป</span>
+                          )}
                         </td>
 
                         <td className="p-3.5 text-right align-top">
@@ -724,6 +864,33 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </tbody>
                 </table>
               </div>
+
+              {newOrderOpen && adminToken && dashboardData && (
+                <AdminNewOrderModal
+                  adminToken={adminToken}
+                  products={dashboardData.products}
+                  rajaSlots={dashboardData.rajaSlots}
+                  standardShippingFee={dashboardData.siteConfig.standardShippingFee}
+                  freeShippingThreshold={dashboardData.siteConfig.freeShippingThreshold}
+                  onClose={() => {
+                    setNewOrderOpen(false);
+                    void fetchDashboard(adminToken);
+                    onStoreUpdated();
+                  }}
+                  onCreated={() => undefined}
+                />
+              )}
+
+              {slipZoom && slipView.dataUrl && (
+                <div
+                  role="dialog"
+                  aria-label="สลิปขนาดเต็ม"
+                  className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-3"
+                  onClick={() => setSlipZoom(false)}
+                >
+                  <img src={slipView.dataUrl} alt="สลิปการโอนเงินขนาดเต็ม" className="max-h-full max-w-full object-contain" />
+                </div>
+              )}
 
               {selectedOrder && (
                 <div
@@ -764,6 +931,110 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         {selectedOrder.grandTotal.toLocaleString()} บาท
                       </p>
                     </div>
+
+                    <div className="rounded-xl border border-[#E8E2D5] p-3 space-y-2 text-xs">
+                      <p className="font-bold text-[#14100A]">หลักฐานการโอนเงิน (สลิป)</p>
+                      {!selectedOrder.slipUploadedAt && <p className="text-[#77717C]">ผู้จองยังไม่ได้แนบสลิป</p>}
+                      {selectedOrder.slipUploadedAt && (
+                        <>
+                          <p className="text-[#5A5244]">
+                            แนบเมื่อ {new Date(selectedOrder.slipUploadedAt).toLocaleString('th-TH')}
+                            {selectedOrder.slipCount && selectedOrder.slipCount > 1 ? ` (แนบ ${selectedOrder.slipCount} ครั้ง ใช้ล่าสุด)` : ''}
+                            {selectedOrder.slipTransferTime ? ` · เวลาโอนที่แจ้ง: ${selectedOrder.slipTransferTime}` : ''}
+                          </p>
+                          {selectedOrder.slipTransferAmount !== undefined && (
+                            <p
+                              className={`font-bold ${
+                                selectedOrder.slipTransferAmount === selectedOrder.grandTotal ? 'text-emerald-700' : 'text-red-700'
+                              }`}
+                            >
+                              ยอดที่ผู้จองแจ้ง ฿{selectedOrder.slipTransferAmount.toLocaleString()}{' '}
+                              {selectedOrder.slipTransferAmount === selectedOrder.grandTotal
+                                ? '(ตรงกับยอดใบจอง)'
+                                : `(ไม่ตรง! ยอดใบจอง ฿${selectedOrder.grandTotal.toLocaleString()})`}
+                            </p>
+                          )}
+                          {slipView.state === 'loading' && <p className="text-[#77717C]">กำลังโหลดสลิป...</p>}
+                          {slipView.state === 'error' && <p className="text-red-700">{slipView.message}</p>}
+                          {slipView.state === 'ready' && slipView.dataUrl && (
+                            <button type="button" onClick={() => setSlipZoom(true)} className="block" aria-label="ขยายรูปสลิป">
+                              <img src={slipView.dataUrl} alt="สลิปการโอนเงิน" className="max-h-56 rounded-lg border border-[#E8E2D5] object-contain bg-white" />
+                              <span className="mt-1 block text-[11px] text-[#8A6D2F] underline">แตะเพื่อดูขนาดเต็ม</span>
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    <details className="rounded-xl border border-[#E8E2D5] p-3 text-xs" open>
+                      <summary className="font-bold text-[#14100A] cursor-pointer min-h-[32px] flex items-center">รายละเอียดผู้ซื้อและรายการทั้งหมด</summary>
+                      <div className="mt-2 space-y-1.5 text-[#29222E]">
+                        <p><strong>วันที่จอง:</strong> {new Date(selectedOrder.createdAt).toLocaleString('th-TH')}{selectedOrder.salesChannel === 'admin' ? ' · เจ้าหน้าที่สร้างให้' : ' · จองผ่านเว็บไซต์'}</p>
+                        <p><strong>อีเมล:</strong> {selectedOrder.customerEmail || '-'}</p>
+                        <p><strong>รหัสไปรษณีย์:</strong> {selectedOrder.postalCode || '-'}</p>
+                        <p>
+                          <strong>ช่องทางชำระ:</strong>{' '}
+                          {selectedOrder.paymentMethod === 'promptpay' ? 'พร้อมเพย์' : selectedOrder.paymentMethod === 'cash' ? 'เงินสด / ชำระกับเจ้าหน้าที่' : 'โอนบัญชีธนาคาร'}
+                          {selectedOrder.transferReference ? ` (${selectedOrder.transferReference})` : ''}
+                        </p>
+                        {selectedOrder.adminNote && <p><strong>หมายเหตุภายใน:</strong> {selectedOrder.adminNote}</p>}
+                        <div className="pt-1">
+                          <strong>รายการ:</strong>
+                          <ul className="mt-1 space-y-1">
+                            {selectedOrder.items.map((it) => (
+                              <li key={it.productId} className="flex justify-between gap-3">
+                                <span className="break-words min-w-0">
+                                  [{it.productCode}] {it.productName} × {it.quantity}
+                                  {it.selectedNumbers?.length ? ` (เลข ${it.selectedNumbers.map((n) => '#' + n).join(', ')})` : ''}
+                                </span>
+                                <span className="font-tabular shrink-0">฿{it.lineTotal.toLocaleString()}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="mt-1 flex justify-between border-t border-[#E8E2D5] pt-1 font-bold">
+                            <span>ค่าจัดส่ง ฿{selectedOrder.shippingTotal.toLocaleString()}</span>
+                            <span className="font-tabular">รวม ฿{selectedOrder.grandTotal.toLocaleString()}</span>
+                          </p>
+                        </div>
+                        <div className="pt-1">
+                          <strong>ประวัติการดำเนินการ:</strong>
+                          <ul className="mt-1 space-y-1 max-h-32 overflow-y-auto">
+                            {selectedOrder.statusHistory.map((h) => (
+                              <li key={h.id} className="text-[11px] text-[#5A5244]">
+                                <span className="font-tabular">{new Date(h.timestamp).toLocaleString('th-TH')}</span> · {h.actor} — {h.note}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </details>
+
+                    {selectedOrder.paymentStatus !== 'payment_rejected' && (
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="ทางลัดตรวจสลิป">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOrderPaymentStatus('verified_paid');
+                            if (orderPrepStatus === 'awaiting_payment') setOrderPrepStatus('inspecting_artifact');
+                            setOrderNote(orderNote || 'ตรวจสอบสลิปแล้ว ยอดถูกต้อง ยืนยันการชำระเงิน');
+                          }}
+                          className="px-3 py-2 min-h-[44px] rounded-lg bg-emerald-700 text-white text-xs font-bold"
+                        >
+                          ✓ สลิปถูกต้อง ยืนยันรับชำระ
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOrderPaymentStatus('pending_verification');
+                            setOrderNote('สลิปไม่ชัดเจนหรือยอดไม่ตรง กรุณาแนบสลิปใหม่ที่เมนู “ตรวจสอบสถานะ”');
+                          }}
+                          className="px-3 py-2 min-h-[44px] rounded-lg border border-amber-500 bg-amber-50 text-amber-900 text-xs font-bold"
+                        >
+                          ขอให้แนบสลิปใหม่
+                        </button>
+                        <span className="w-full text-[11px] text-[#77717C]">ปุ่มลัดเพียงเติมค่าให้ในช่องด้านล่าง ต้องกด “บันทึก” ท้ายฟอร์มจึงจะมีผล และผู้จองเห็นหมายเหตุในหน้าตรวจสอบสถานะ</span>
+                      </div>
+                    )}
 
                     <div className="space-y-3 text-xs">
                       <div>

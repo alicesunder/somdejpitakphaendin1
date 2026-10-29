@@ -138,8 +138,16 @@ export interface OrderRecord {
   deliveryMethod?: DeliveryMethod;
   shippingAddress: string;
   postalCode: string;
-  paymentMethod: 'promptpay' | 'bank_transfer';
+  paymentMethod: 'promptpay' | 'bank_transfer' | 'cash';
   transferReference?: string;
+  /** 'admin' = created by staff in the back office (counter / phone sale) */
+  salesChannel?: 'online' | 'admin';
+  adminNote?: string;
+  /** Payment slip (the image itself is stored separately; see server /api/orders/slip) */
+  slipUploadedAt?: string;
+  slipCount?: number;
+  slipTransferAmount?: number;
+  slipTransferTime?: string;
   items: OrderLineItem[];
   selectedNumbers?: number[];
   subtotal: number;
@@ -168,8 +176,11 @@ export interface PublicTrackedOrder {
   deliveryMethod?: DeliveryMethod;
   shippingAddress?: string;
   postalCode: string;
-  paymentMethod: 'promptpay' | 'bank_transfer';
+  paymentMethod: 'promptpay' | 'bank_transfer' | 'cash';
   transferReference?: string;
+  slipUploadedAt?: string;
+  slipTransferAmount?: number;
+  slipTransferTime?: string;
   items: OrderLineItem[];
   selectedNumbers?: number[];
   subtotal: number;

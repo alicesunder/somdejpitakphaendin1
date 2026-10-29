@@ -62,13 +62,29 @@ export function createFirestoreStore(seed: () => Seed) {
     inquiries: new Map(),
   };
   const colLoaded = new Set<ColName>();
+  // When the in-memory copy was last known to match Firestore. Lets busy read-only
+  // endpoints skip Firestore reads (the free tier allows only 50k reads/day).
+  let syncedAt = 0;
 
   // JSON round-trip drops `undefined` values, which Firestore rejects.
   const clean = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
   const payloadOf = (name: DocName, value: unknown, rev: number) =>
     name === 'siteConfig' ? { rev, value: clean(value) } : { rev, items: clean(value) };
 
-  async function load(store: Store, cols: ColName[]): Promise<void> {
+  async function load(
+    store: Store,
+    cols: ColName[],
+    opts: { maxAgeMs?: number } = {},
+  ): Promise<void> {
+    if (
+      opts.maxAgeMs &&
+      cols.length === 0 &&
+      syncedAt > 0 &&
+      Date.now() - syncedAt < opts.maxAgeMs
+    ) {
+      return;
+    }
+    syncedAt = 0;
     const d = getDb();
     const refs = DOCS.map((n) => d.collection('store').doc(n));
     const snaps = await d.getAll(...refs);
@@ -106,6 +122,7 @@ export function createFirestoreStore(seed: () => Seed) {
       colSnap[c] = new Map(items.map((i) => [i.id, JSON.stringify(i)]));
       colLoaded.add(c);
     }
+    syncedAt = Date.now();
   }
 
   async function persist(store: Store): Promise<void> {
@@ -129,6 +146,8 @@ export function createFirestoreStore(seed: () => Seed) {
     }
     if (!changedDocs.length && !colWrites.length && !colDeletes.length) return;
 
+    // Until the write succeeds the in-memory copy may differ from Firestore.
+    syncedAt = 0;
     await d.runTransaction(async (tx) => {
       const refs = changedDocs.map((n) => d.collection('store').doc(n));
       const current = await Promise.all(refs.map((r) => tx.get(r)));
@@ -150,7 +169,39 @@ export function createFirestoreStore(seed: () => Seed) {
     });
     for (const w of colWrites) colSnap[w.col].set(w.id, JSON.stringify(w.item));
     for (const x of colDeletes) colSnap[x.col].delete(x.id);
+    syncedAt = Date.now();
   }
 
-  return { load, persist };
+  // Payment-slip images live in their own collection (one document per order) so they are
+  // only read when someone opens a slip, never with the order list.
+  async function saveSlip(orderId: string, rec: Record<string, unknown>): Promise<void> {
+    await getDb().collection('slips').doc(orderId).set(rec);
+  }
+  async function getSlip(orderId: string): Promise<Record<string, any> | null> {
+    const snap = await getDb().collection('slips').doc(orderId).get();
+    return snap.exists ? (snap.data() as Record<string, any>) : null;
+  }
+
+  /** Everything stored in Firestore, for the one-time copy into Postgres. */
+  async function exportAll() {
+    const d = getDb();
+    const snaps = await d.getAll(...DOCS.map((n) => d.collection('store').doc(n)));
+    if (!snaps[0].exists) return null;
+    const docs: Partial<Record<DocName, { rev: number; value: unknown }>> = {};
+    DOCS.forEach((n, i) => {
+      const data = snaps[i].data();
+      if (data) docs[n] = { rev: data.rev ?? 1, value: n === 'siteConfig' ? data.value : data.items };
+    });
+    const [orders, inquiries, slips] = await Promise.all(
+      ['orders', 'inquiries', 'slips'].map((c) => d.collection(c).get()),
+    );
+    return {
+      docs,
+      orders: orders.docs.map((x) => x.data()),
+      inquiries: inquiries.docs.map((x) => x.data()),
+      slips: slips.docs.map((x) => ({ orderId: x.id, data: x.data() })),
+    };
+  }
+
+  return { load, persist, saveSlip, getSlip, exportAll };
 }

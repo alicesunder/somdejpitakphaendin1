@@ -1099,7 +1099,7 @@ function validateCheckoutForm(input) {
     }
   }
   const method = input.paymentMethod || "promptpay";
-  if (method !== "promptpay" && method !== "bank_transfer") {
+  if (method !== "promptpay" && method !== "bank_transfer" && method !== "cash") {
     fieldErrors.paymentMethod = "\u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E0A\u0E48\u0E2D\u0E07\u0E17\u0E32\u0E07\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19";
   }
   return {
@@ -1140,6 +1140,9 @@ function maskCustomerPII(order) {
     postalCode: order.postalCode,
     paymentMethod: order.paymentMethod,
     transferReference: order.transferReference,
+    slipUploadedAt: order.slipUploadedAt,
+    slipTransferAmount: order.slipTransferAmount,
+    slipTransferTime: order.slipTransferTime,
     items: order.items,
     selectedNumbers: order.selectedNumbers,
     subtotal: order.subtotal,
@@ -1190,10 +1193,10 @@ function createFirestoreStore(seed) {
   let db = null;
   const getDb = () => {
     if (db) return db;
-    const app = getApps()[0] ?? initializeApp({
+    const app2 = getApps()[0] ?? initializeApp({
       credential: cert(parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT))
     });
-    db = getFirestore(app, process.env.FIREBASE_DATABASE_ID || "(default)");
+    db = getFirestore(app2, process.env.FIREBASE_DATABASE_ID || "(default)");
     return db;
   };
   const docSnap = {};
@@ -1203,9 +1206,14 @@ function createFirestoreStore(seed) {
     inquiries: /* @__PURE__ */ new Map()
   };
   const colLoaded = /* @__PURE__ */ new Set();
+  let syncedAt = 0;
   const clean = (v) => JSON.parse(JSON.stringify(v));
   const payloadOf = (name, value, rev) => name === "siteConfig" ? { rev, value: clean(value) } : { rev, items: clean(value) };
-  async function load(store2, cols) {
+  async function load(store2, cols, opts = {}) {
+    if (opts.maxAgeMs && cols.length === 0 && syncedAt > 0 && Date.now() - syncedAt < opts.maxAgeMs) {
+      return;
+    }
+    syncedAt = 0;
     const d = getDb();
     const refs = DOCS.map((n) => d.collection("store").doc(n));
     const snaps = await d.getAll(...refs);
@@ -1241,6 +1249,7 @@ function createFirestoreStore(seed) {
       colSnap[c] = new Map(items.map((i) => [i.id, JSON.stringify(i)]));
       colLoaded.add(c);
     }
+    syncedAt = Date.now();
   }
   async function persist(store2) {
     const d = getDb();
@@ -1262,6 +1271,7 @@ function createFirestoreStore(seed) {
       }
     }
     if (!changedDocs.length && !colWrites.length && !colDeletes.length) return;
+    syncedAt = 0;
     await d.runTransaction(async (tx) => {
       const refs = changedDocs.map((n) => d.collection("store").doc(n));
       const current = await Promise.all(refs.map((r) => tx.get(r)));
@@ -1282,18 +1292,343 @@ function createFirestoreStore(seed) {
     });
     for (const w of colWrites) colSnap[w.col].set(w.id, JSON.stringify(w.item));
     for (const x of colDeletes) colSnap[x.col].delete(x.id);
+    syncedAt = Date.now();
   }
-  return { load, persist };
+  async function saveSlip(orderId, rec) {
+    await getDb().collection("slips").doc(orderId).set(rec);
+  }
+  async function getSlip(orderId) {
+    const snap = await getDb().collection("slips").doc(orderId).get();
+    return snap.exists ? snap.data() : null;
+  }
+  async function exportAll() {
+    const d = getDb();
+    const snaps = await d.getAll(...DOCS.map((n) => d.collection("store").doc(n)));
+    if (!snaps[0].exists) return null;
+    const docs = {};
+    DOCS.forEach((n, i) => {
+      const data = snaps[i].data();
+      if (data) docs[n] = { rev: data.rev ?? 1, value: n === "siteConfig" ? data.value : data.items };
+    });
+    const [orders, inquiries, slips] = await Promise.all(
+      ["orders", "inquiries", "slips"].map((c) => d.collection(c).get())
+    );
+    return {
+      docs,
+      orders: orders.docs.map((x) => x.data()),
+      inquiries: inquiries.docs.map((x) => x.data()),
+      slips: slips.docs.map((x) => ({ orderId: x.id, data: x.data() }))
+    };
+  }
+  return { load, persist, saveSlip, getSlip, exportAll };
+}
+
+// server/postgresStore.ts
+import pg from "pg";
+var DOCS2 = ["siteConfig", "products", "rajaSlots", "news"];
+var COLS2 = ["orders", "inquiries"];
+var ConflictError2 = class extends Error {
+  constructor() {
+    super(...arguments);
+    this.conflict = true;
+  }
+};
+function isPostgresConfigured() {
+  return Boolean(process.env.DATABASE_URL);
+}
+function createPostgresStore(seed, importLegacy) {
+  let pool = null;
+  const getPool = () => {
+    if (pool) return pool;
+    const url = process.env.DATABASE_URL.trim().replace(/([?&])sslmode=[^&]*&?/, "$1").replace(/[?&]$/, "");
+    const local = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
+    pool = new pg.Pool({
+      connectionString: url,
+      ssl: local ? false : { rejectUnauthorized: false },
+      max: 3,
+      idleTimeoutMillis: 1e4,
+      connectionTimeoutMillis: 8e3
+    });
+    pool.on("error", (e) => console.warn("[db] idle client error:", e.message));
+    return pool;
+  };
+  async function inTx(fn) {
+    const client = await getPool().connect();
+    try {
+      await client.query("begin");
+      const out = await fn(client);
+      await client.query("commit");
+      return out;
+    } catch (err) {
+      try {
+        await client.query("rollback");
+      } catch {
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+  const docSnap = {};
+  const docRev = {};
+  const colSnap = {
+    orders: /* @__PURE__ */ new Map(),
+    inquiries: /* @__PURE__ */ new Map()
+  };
+  const colLoaded = /* @__PURE__ */ new Set();
+  let syncedAt = 0;
+  let ready = null;
+  const json = (v) => JSON.stringify(v ?? null);
+  async function ensureSeeded() {
+    const [{ n }] = (await getPool().query("select count(*)::int as n from bpp.docs")).rows;
+    if (n >= DOCS2.length) return;
+    const legacy = importLegacy ? await importLegacy() : null;
+    const s = seed();
+    await inTx(async (c) => {
+      await c.query("select pg_advisory_xact_lock(hashtext('bpp_seed'))");
+      for (const name of DOCS2) {
+        const old = legacy?.docs[name];
+        const value = old && old.value !== void 0 && old.value !== null ? old.value : s[name];
+        await c.query(
+          "insert into bpp.docs (name, rev, value) values ($1, $2, $3::jsonb) on conflict (name) do nothing",
+          [name, old?.rev ?? 1, json(value)]
+        );
+      }
+      if (!legacy) return;
+      for (const col of COLS2) {
+        for (const item of legacy[col]) {
+          if (!item?.id) continue;
+          await c.query(
+            `insert into bpp.${col} (id, created_at, data) values ($1, $2, $3::jsonb) on conflict (id) do nothing`,
+            [item.id, String(item.createdAt ?? ""), json(item)]
+          );
+        }
+      }
+      for (const slip of legacy.slips) {
+        await c.query(
+          "insert into bpp.slips (order_id, data) values ($1, $2::jsonb) on conflict (order_id) do nothing",
+          [slip.orderId, json(slip.data)]
+        );
+      }
+    });
+    console.log(
+      legacy ? `[db] copied store from Firestore: ${legacy.orders.length} orders, ${legacy.inquiries.length} inquiries, ${legacy.slips.length} slips` : "[db] wrote seed data to an empty database"
+    );
+  }
+  async function load(store2, cols, opts = {}) {
+    if (opts.maxAgeMs && cols.length === 0 && syncedAt > 0 && Date.now() - syncedAt < opts.maxAgeMs) {
+      return;
+    }
+    syncedAt = 0;
+    if (!ready) {
+      ready = ensureSeeded().catch((err) => {
+        ready = null;
+        throw err;
+      });
+    }
+    await ready;
+    const p = getPool();
+    const rows = (await p.query("select name, rev, value from bpp.docs")).rows;
+    const byName = new Map(rows.map((r) => [r.name, r]));
+    for (const name of DOCS2) {
+      const row = byName.get(name);
+      store2[name] = row ? row.value : null;
+      docRev[name] = row ? row.rev : 0;
+      docSnap[name] = JSON.stringify(store2[name]);
+    }
+    colLoaded.clear();
+    for (const c of COLS2) {
+      colSnap[c] = /* @__PURE__ */ new Map();
+      store2[c] = [];
+    }
+    for (const c of cols) {
+      const items = (await p.query(`select data from bpp.${c} order by created_at desc`)).rows.map((r) => r.data);
+      store2[c] = items;
+      colSnap[c] = new Map(items.map((i) => [i.id, JSON.stringify(i)]));
+      colLoaded.add(c);
+    }
+    syncedAt = Date.now();
+  }
+  async function persist(store2) {
+    const changedDocs = DOCS2.filter((n) => JSON.stringify(store2[n]) !== docSnap[n]);
+    const colWrites = [];
+    const colDeletes = [];
+    for (const c of COLS2) {
+      const seen = /* @__PURE__ */ new Set();
+      for (const item of store2[c]) {
+        seen.add(item.id);
+        if (colSnap[c].get(item.id) !== JSON.stringify(item)) colWrites.push({ col: c, item });
+      }
+      if (colLoaded.has(c)) {
+        for (const id of colSnap[c].keys()) {
+          if (!seen.has(id)) colDeletes.push({ col: c, id });
+        }
+      }
+    }
+    if (!changedDocs.length && !colWrites.length && !colDeletes.length) return;
+    syncedAt = 0;
+    await inTx(async (c) => {
+      for (const name of changedDocs) {
+        const r = await c.query("update bpp.docs set value = $1::jsonb, rev = rev + 1 where name = $2 and rev = $3", [
+          json(store2[name]),
+          name,
+          docRev[name] ?? 0
+        ]);
+        if (r.rowCount !== 1) throw new ConflictError2("stale revision");
+      }
+      for (const w of colWrites) {
+        await c.query(
+          `insert into bpp.${w.col} (id, created_at, data) values ($1, $2, $3::jsonb)
+           on conflict (id) do update set created_at = excluded.created_at, data = excluded.data`,
+          [w.item.id, String(w.item.createdAt ?? ""), json(w.item)]
+        );
+      }
+      for (const x of colDeletes) await c.query(`delete from bpp.${x.col} where id = $1`, [x.id]);
+    });
+    for (const name of changedDocs) {
+      docRev[name] = (docRev[name] ?? 0) + 1;
+      docSnap[name] = JSON.stringify(store2[name]);
+    }
+    for (const w of colWrites) colSnap[w.col].set(w.item.id, JSON.stringify(w.item));
+    for (const x of colDeletes) colSnap[x.col].delete(x.id);
+    syncedAt = Date.now();
+  }
+  async function saveSlip(orderId, rec) {
+    await getPool().query(
+      `insert into bpp.slips (order_id, data) values ($1, $2::jsonb)
+       on conflict (order_id) do update set data = excluded.data, updated_at = now()`,
+      [orderId, json(rec)]
+    );
+  }
+  async function getSlip(orderId) {
+    const rows = (await getPool().query("select data from bpp.slips where order_id = $1", [orderId])).rows;
+    return rows.length ? rows[0].data : null;
+  }
+  async function hit(key, windowSec, inc = 1) {
+    const p = getPool();
+    const rows = (await p.query(
+      `insert into bpp.rate_limits as r (key, count, window_start) values ($1, $3, now())
+         on conflict (key) do update set
+           count = case when r.window_start < now() - make_interval(secs => $2::float8) then $3 else r.count + $3 end,
+           window_start = case when r.window_start < now() - make_interval(secs => $2::float8) then now() else r.window_start end
+         returning count`,
+      [key, windowSec, inc]
+    )).rows;
+    if (Math.random() < 0.01) {
+      p.query("delete from bpp.rate_limits where window_start < now() - interval '1 day'").catch(() => {
+      });
+    }
+    return rows[0].count;
+  }
+  return { load, persist, saveSlip, getSlip, hit };
+}
+
+// server/rateLimit.ts
+function memoryHit() {
+  const counters = /* @__PURE__ */ new Map();
+  return async (key, windowSec, inc = 1) => {
+    const now = Date.now();
+    let c = counters.get(key);
+    if (!c || now - c.start > windowSec * 1e3) {
+      c = { count: 0, start: now };
+      counters.set(key, c);
+    }
+    c.count += inc;
+    return c.count;
+  };
+}
+function clientIp(req) {
+  const fwd = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return fwd || String(req.headers["x-real-ip"] || req.socket.remoteAddress || "unknown");
+}
+var TOO_MANY = "\u0E21\u0E35\u0E01\u0E32\u0E23\u0E2A\u0E48\u0E07\u0E04\u0E33\u0E02\u0E2D\u0E21\u0E32\u0E01\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48";
+var orderKey = (req) => {
+  const n = String(req.body?.orderNumber || "").trim().toUpperCase();
+  return n ? `fail:order:${n}` : null;
+};
+var RULES = [
+  // Per IP only: a shared counter would let anyone lock the real admin out.
+  { method: "POST", path: "/admin/login", perIp: 10, windowSec: 15 * 60 },
+  {
+    method: "POST",
+    path: "/orders/track",
+    perIp: 30,
+    windowSec: 10 * 60,
+    failKey: orderKey,
+    maxFails: 10,
+    failWindowSec: 60 * 60,
+    failMessage: "\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E19\u0E35\u0E49\u0E1C\u0E34\u0E14\u0E2B\u0E25\u0E32\u0E22\u0E04\u0E23\u0E31\u0E49\u0E07 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E2D 1 \u0E0A\u0E31\u0E48\u0E27\u0E42\u0E21\u0E07 \u0E2B\u0E23\u0E37\u0E2D\u0E15\u0E34\u0E14\u0E15\u0E48\u0E2D\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E17\u0E32\u0E07 LINE"
+  },
+  {
+    method: "POST",
+    path: "/orders/slip",
+    perIp: 20,
+    windowSec: 10 * 60,
+    failKey: orderKey,
+    maxFails: 10,
+    failWindowSec: 60 * 60,
+    failMessage: "\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E19\u0E35\u0E49\u0E1C\u0E34\u0E14\u0E2B\u0E25\u0E32\u0E22\u0E04\u0E23\u0E31\u0E49\u0E07 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E2D 1 \u0E0A\u0E31\u0E48\u0E27\u0E42\u0E21\u0E07 \u0E2B\u0E23\u0E37\u0E2D\u0E15\u0E34\u0E14\u0E15\u0E48\u0E2D\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E17\u0E32\u0E07 LINE"
+  },
+  { method: "POST", path: "/orders", perIp: 30, windowSec: 10 * 60 },
+  { method: "POST", path: "/raja-slots/toggle", perIp: 120, windowSec: 10 * 60 },
+  { method: "POST", path: "/inquiries", perIp: 5, windowSec: 10 * 60 }
+];
+function rateLimiter(getHit) {
+  return async (req, res, next) => {
+    const rule = RULES.find((r) => r.method === req.method && r.path === req.path);
+    if (!rule) return next();
+    const hit = getHit();
+    try {
+      const ip = clientIp(req);
+      const n = await hit(`ip:${rule.path}:${ip}`, rule.windowSec);
+      if (n > rule.perIp) {
+        res.set("Retry-After", String(rule.windowSec));
+        res.status(429).json({ error: TOO_MANY });
+        return;
+      }
+      const fk = rule.failKey?.(req);
+      if (fk) {
+        const fails = await hit(fk, rule.failWindowSec, 0);
+        if (fails >= rule.maxFails) {
+          res.set("Retry-After", String(rule.failWindowSec));
+          res.status(429).json({ error: rule.failMessage });
+          return;
+        }
+        const send = res.json.bind(res);
+        res.json = ((body) => {
+          if (res.statusCode !== 401 && res.statusCode !== 404) return send(body);
+          hit(fk, rule.failWindowSec).catch(() => 0).then(() => send(body));
+          return res;
+        });
+      }
+    } catch (err) {
+      console.warn("[rate-limit] skipped:", err.message);
+    }
+    next();
+  };
+}
+
+// src/config/booking.ts
+var BOOKING_OPENS_AT = "2026-11-01T00:00:00+07:00";
+var BOOKING_OPEN_DATE_TEXT = "1 \u0E1E\u0E24\u0E28\u0E08\u0E34\u0E01\u0E32\u0E22\u0E19 2569";
+var BOOKING_CLOSED_MESSAGE = `\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E40\u0E1B\u0E34\u0E14\u0E43\u0E2B\u0E49\u0E08\u0E2D\u0E07 \u2014 \u0E40\u0E1B\u0E34\u0E14\u0E43\u0E2B\u0E49\u0E08\u0E2D\u0E07\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 ${BOOKING_OPEN_DATE_TEXT}`;
+function isBookingOpen(now = Date.now(), opensAt = BOOKING_OPENS_AT) {
+  const t = Date.parse(opensAt);
+  return Number.isNaN(t) ? true : now >= t;
 }
 
 // server.ts
-var useFirestore = isFirestoreConfigured();
-var firestoreStore = useFirestore ? createFirestoreStore(() => ({
+var seedStore = () => ({
   siteConfig: structuredClone(initialSiteConfig),
   products: structuredClone(initialProducts),
   rajaSlots: createInitialRajaSlots(),
   news: structuredClone(initialNews)
-})) : null;
+});
+var legacyFirestore = isFirestoreConfigured() ? createFirestoreStore(seedStore) : null;
+var postgresStore = isPostgresConfigured() ? createPostgresStore(seedStore, legacyFirestore ? legacyFirestore.exportAll : void 0) : null;
+var remoteStore = postgresStore ?? legacyFirestore;
+var useRemoteStore = remoteStore !== null;
+var rateLimitHit = postgresStore ? postgresStore.hit : memoryHit();
 var DATA_DIR = path.resolve(process.cwd(), ".data");
 var DATA_FILE = path.join(DATA_DIR, "heritage_store_v6.json");
 function loadStore() {
@@ -1333,7 +1668,7 @@ function loadStore() {
   return fresh;
 }
 function saveStore(data) {
-  if (useFirestore) return;
+  if (useRemoteStore) return;
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -1345,7 +1680,7 @@ function saveStore(data) {
     console.error("Failed to persist store data:", err);
   }
 }
-var store = useFirestore ? {
+var store = useRemoteStore ? {
   siteConfig: structuredClone(initialSiteConfig),
   products: [],
   orders: [],
@@ -1461,35 +1796,111 @@ function enrichRajaSlotsForAdmin() {
     };
   });
 }
+function bookingOpen() {
+  return isBookingOpen(Date.now(), process.env.BOOKING_OPENS_AT || void 0);
+}
+var SLIP_DIR = path.join(DATA_DIR, "slips");
+var slipFile = (orderId) => path.join(SLIP_DIR, `${orderId.replace(/[^\w-]/g, "_")}.json`);
+async function writeSlip(rec) {
+  if (remoteStore) {
+    await remoteStore.saveSlip(rec.orderId, rec);
+    return;
+  }
+  fs.mkdirSync(SLIP_DIR, { recursive: true });
+  fs.writeFileSync(slipFile(rec.orderId), JSON.stringify(rec), "utf-8");
+}
+async function readSlip(orderId) {
+  if (remoteStore) return await remoteStore.getSlip(orderId);
+  try {
+    return JSON.parse(fs.readFileSync(slipFile(orderId), "utf-8"));
+  } catch {
+    return null;
+  }
+}
+var SLIP_MAX_CHARS = 9e5;
+var SLIP_MAX_UPLOADS = 5;
+function parseSlipDataUrl(raw) {
+  if (typeof raw !== "string" || raw.length > SLIP_MAX_CHARS) return null;
+  const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(raw);
+  if (!m) return null;
+  const head = Buffer.from(m[2].slice(0, 24), "base64");
+  const ok = m[1] === "jpeg" && head[0] === 255 && head[1] === 216 || m[1] === "png" && head[0] === 137 && head[1] === 80 && head[2] === 78 && head[3] === 71 || m[1] === "webp" && head.subarray(0, 4).toString("ascii") === "RIFF" && head.subarray(8, 12).toString("ascii") === "WEBP";
+  return ok ? raw : null;
+}
+function applyBookingEffects(calc, orderNumber, sessionId, nowIso) {
+  for (const num of calc.selectedNumbers) {
+    const slot = store.rajaSlots.find((s) => s.slotNumber === num);
+    if (slot) {
+      slot.status = "booked";
+      slot.sessionId = sessionId;
+      slot.heldUntil = 0;
+      slot.orderNumber = orderNumber;
+      slot.updatedAt = nowIso;
+    }
+  }
+  for (const line of calc.lineItems) {
+    const prod = store.products.find((p) => p.id === line.productId);
+    if (prod) {
+      prod.bookedCount = (prod.bookedCount || 0) + line.quantity;
+      if (prod.requiresNumberSelection) {
+        const totalBookedSlots = store.rajaSlots.filter((s) => s.status === "booked").length;
+        prod.stock = Math.max(0, 99 - totalBookedSlots);
+      } else if (!prod.isMadeToOrder) {
+        prod.stock = Math.max(0, prod.stock - line.quantity);
+      }
+    }
+  }
+}
 function createApp() {
-  const app = express();
-  app.use(express.json({ limit: "2mb" }));
+  const app2 = express();
+  app2.disable("x-powered-by");
+  app2.use(express.json({ limit: "2mb" }));
+  app2.use("/api", (_req, res, next) => {
+    res.set({
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "strict-origin-when-cross-origin"
+    });
+    next();
+  });
+  app2.use("/api", rateLimiter(() => rateLimitHit));
   let queue = Promise.resolve();
-  app.use("/api", (req, res, next) => {
+  app2.use("/api", (req, res, next) => {
     const prev = queue;
     let release;
     queue = new Promise((r) => release = r);
     res.on("close", release);
     prev.then(async () => {
       try {
-        if (process.env.VERCEL && !useFirestore) {
+        if (req.path === "/admin/login") {
+          next();
+          return;
+        }
+        if (req.method === "POST" && (req.path === "/orders" || req.path === "/raja-slots/toggle") && !bookingOpen()) {
+          res.status(403).json({ error: BOOKING_CLOSED_MESSAGE, bookingClosed: true });
+          return;
+        }
+        if (process.env.VERCEL && !useRemoteStore) {
           res.status(503).json({
-            error: "\u0E23\u0E30\u0E1A\u0E1A\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 (FIREBASE_SERVICE_ACCOUNT)"
+            error: "\u0E23\u0E30\u0E1A\u0E1A\u0E10\u0E32\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 (DATABASE_URL)"
           });
           return;
         }
-        if (firestoreStore) {
+        if (remoteStore) {
           const cols = [];
           if (req.path.startsWith("/orders") || req.path.startsWith("/admin")) {
             cols.push("orders");
           }
           if (req.path.startsWith("/admin")) cols.push("inquiries");
-          await firestoreStore.load(store, cols);
+          const publicRead = req.method === "GET" && (req.path === "/bootstrap" || req.path === "/raja-slots");
+          await remoteStore.load(store, cols, {
+            maxAgeMs: publicRead ? 6e4 : 0
+          });
         }
-        if (firestoreStore) {
+        if (remoteStore) {
           const originalJson = res.json.bind(res);
           res.json = ((body) => {
-            firestoreStore.persist(store).then(() => originalJson(body)).catch((err) => {
+            remoteStore.persist(store).then(() => originalJson(body)).catch((err) => {
               console.error("Persist failed:", err);
               res.status(err?.conflict ? 409 : 500);
               originalJson({
@@ -1506,7 +1917,8 @@ function createApp() {
       }
     });
   });
-  app.get("/api/bootstrap", (_req, res) => {
+  app2.get("/api/bootstrap", (_req, res) => {
+    res.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
     purgeExpiredRajaSlotHolds();
     const publicProducts = store.products.filter((p) => p.isVisible);
     res.json({
@@ -1517,14 +1929,19 @@ function createApp() {
       news: store.news
     });
   });
-  app.get("/api/raja-slots", (_req, res) => {
+  app2.get("/api/raja-slots", (_req, res) => {
+    res.set("Cache-Control", "public, s-maxage=20, stale-while-revalidate=60");
     purgeExpiredRajaSlotHolds();
     res.json({
       rajaSlots: store.rajaSlots,
       serverTime: Date.now()
     });
   });
-  app.post("/api/raja-slots/toggle", (req, res) => {
+  app2.post("/api/raja-slots/toggle", (req, res) => {
+    if (!bookingOpen()) {
+      res.status(403).json({ error: BOOKING_CLOSED_MESSAGE, bookingClosed: true });
+      return;
+    }
     purgeExpiredRajaSlotHolds();
     const { slotNumber, sessionId } = req.body || {};
     const num = Number(slotNumber);
@@ -1582,7 +1999,7 @@ function createApp() {
       serverTime: now
     });
   });
-  app.post("/api/raja-slots/release-expired", (_req, res) => {
+  app2.post("/api/raja-slots/release-expired", (_req, res) => {
     const mutated = purgeExpiredRajaSlotHolds();
     res.json({
       released: mutated,
@@ -1590,7 +2007,7 @@ function createApp() {
       serverTime: Date.now()
     });
   });
-  app.post("/api/cart/calculate", (req, res) => {
+  app2.post("/api/cart/calculate", (req, res) => {
     const { items } = req.body || {};
     const calc = calculateOrderTotals(
       Array.isArray(items) ? items : [],
@@ -1600,7 +2017,11 @@ function createApp() {
     );
     res.json(calc);
   });
-  app.post("/api/orders", (req, res) => {
+  app2.post("/api/orders", (req, res) => {
+    if (!bookingOpen()) {
+      res.status(403).json({ error: BOOKING_CLOSED_MESSAGE, bookingClosed: true });
+      return;
+    }
     purgeExpiredRajaSlotHolds();
     const {
       items,
@@ -1689,30 +2110,7 @@ function createApp() {
     }
     const randomSuffix = Math.floor(1e3 + Math.random() * 9e3);
     const orderNumber = `BPP-2569-${randomSuffix}`;
-    for (const num of calc.selectedNumbers) {
-      const slot = store.rajaSlots.find((s) => s.slotNumber === num);
-      if (slot) {
-        slot.status = "booked";
-        slot.sessionId = cleanSession;
-        slot.heldUntil = 0;
-        slot.orderNumber = orderNumber;
-        slot.updatedAt = nowIso;
-      }
-    }
-    for (const line of calc.lineItems) {
-      const prod = store.products.find((p) => p.id === line.productId);
-      if (prod) {
-        prod.bookedCount = (prod.bookedCount || 0) + line.quantity;
-        if (prod.requiresNumberSelection) {
-          const totalBookedSlots = store.rajaSlots.filter(
-            (s) => s.status === "booked"
-          ).length;
-          prod.stock = Math.max(0, 99 - totalBookedSlots);
-        } else if (!prod.isMadeToOrder) {
-          prod.stock = Math.max(0, prod.stock - line.quantity);
-        }
-      }
-    }
+    applyBookingEffects(calc, orderNumber, cleanSession, nowIso);
     const reservationDateThai = formatThaiDate(nowIso);
     const grandTotalThaiText = numberToThaiBahtText(calc.grandTotal);
     const rawAddress = String(shippingAddress || "").trim();
@@ -1765,7 +2163,7 @@ function createApp() {
       products: store.products.filter((p) => p.isVisible)
     });
   });
-  app.post("/api/orders/track", (req, res) => {
+  app2.post("/api/orders/track", (req, res) => {
     const { orderNumber, phoneVerify } = req.body || {};
     const cleanOrderNo = String(orderNumber || "").trim().toUpperCase();
     const cleanPhone = String(phoneVerify || "").trim();
@@ -1788,7 +2186,58 @@ function createApp() {
       order: maskCustomerPII(found)
     });
   });
-  app.post("/api/inquiries", (req, res) => {
+  app2.post("/api/orders/slip", async (req, res) => {
+    try {
+      const { orderNumber, phoneVerify, image, transferAmount, transferTime } = req.body || {};
+      const order = store.orders.find(
+        (o) => o.orderNumber.toUpperCase() === String(orderNumber || "").trim().toUpperCase()
+      );
+      if (!order || !verifyPhoneLast4(order.customerPhone, String(phoneVerify || ""))) {
+        res.status(404).json({ error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E41\u0E25\u0E30\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23 4 \u0E15\u0E31\u0E27\u0E17\u0E49\u0E32\u0E22" });
+        return;
+      }
+      if (order.paymentStatus === "verified_paid") {
+        res.status(409).json({ error: "\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E19\u0E35\u0E49\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E01\u0E32\u0E23\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E49\u0E27 \u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E41\u0E19\u0E1A\u0E2A\u0E25\u0E34\u0E1B\u0E40\u0E1E\u0E34\u0E48\u0E21" });
+        return;
+      }
+      if (order.paymentStatus === "payment_rejected") {
+        res.status(409).json({ error: "\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E19\u0E35\u0E49\u0E16\u0E39\u0E01\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01\u0E41\u0E25\u0E49\u0E27 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E34\u0E14\u0E15\u0E48\u0E2D\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E2B\u0E23\u0E37\u0E2D\u0E08\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48" });
+        return;
+      }
+      if ((order.slipCount || 0) >= SLIP_MAX_UPLOADS) {
+        res.status(429).json({ error: "\u0E41\u0E19\u0E1A\u0E2A\u0E25\u0E34\u0E1B\u0E04\u0E23\u0E1A\u0E08\u0E33\u0E19\u0E27\u0E19\u0E04\u0E23\u0E31\u0E49\u0E07\u0E17\u0E35\u0E48\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E41\u0E25\u0E49\u0E27 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E34\u0E14\u0E15\u0E48\u0E2D\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48" });
+        return;
+      }
+      const dataUrl = parseSlipDataUrl(image);
+      if (!dataUrl) {
+        res.status(400).json({ error: "\u0E44\u0E1F\u0E25\u0E4C\u0E2A\u0E25\u0E34\u0E1B\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E2B\u0E23\u0E37\u0E2D\u0E43\u0E2B\u0E0D\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B (\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A JPG / PNG / WebP)" });
+        return;
+      }
+      const amount = Number(transferAmount);
+      const when = String(transferTime || "").trim().slice(0, 40);
+      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      await writeSlip({ orderId: order.id, orderNumber: order.orderNumber, dataUrl, uploadedAt: nowIso });
+      order.slipUploadedAt = nowIso;
+      order.slipCount = (order.slipCount || 0) + 1;
+      order.slipTransferAmount = Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : void 0;
+      order.slipTransferTime = when || void 0;
+      order.statusHistory.unshift({
+        id: `log-${Date.now()}`,
+        timestamp: nowIso,
+        actor: "\u0E1C\u0E39\u0E49\u0E08\u0E2D\u0E07 (\u0E41\u0E19\u0E1A\u0E2A\u0E25\u0E34\u0E1B)",
+        paymentStatus: order.paymentStatus,
+        preparationStatus: order.preparationStatus,
+        shippingStatus: order.shippingStatus,
+        note: `\u0E41\u0E19\u0E1A\u0E2B\u0E25\u0E31\u0E01\u0E10\u0E32\u0E19\u0E01\u0E32\u0E23\u0E42\u0E2D\u0E19\u0E40\u0E07\u0E34\u0E19 (\u0E04\u0E23\u0E31\u0E49\u0E07\u0E17\u0E35\u0E48 ${order.slipCount})${order.slipTransferAmount ? ` \u0E22\u0E2D\u0E14 \u0E3F${order.slipTransferAmount.toLocaleString()}` : ""}${when ? ` \u0E40\u0E27\u0E25\u0E32\u0E42\u0E2D\u0E19 ${when}` : ""} \u0E23\u0E2D\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A`
+      });
+      saveStore(store);
+      res.status(201).json({ order: maskCustomerPII(order) });
+    } catch (err) {
+      console.error("Slip upload failed:", err);
+      res.status(500).json({ error: "\u0E41\u0E19\u0E1A\u0E2A\u0E25\u0E34\u0E1B\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E25\u0E2D\u0E07\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07" });
+    }
+  });
+  app2.post("/api/inquiries", (req, res) => {
     const { name, phone, subject, message, orderNumber } = req.body || {};
     if (!name || !phone || !subject || !message) {
       res.status(400).json({
@@ -1809,9 +2258,17 @@ function createApp() {
     saveStore(store);
     res.status(201).json({ success: true, inquiryId: inquiry.id });
   });
-  app.post("/api/admin/login", (req, res) => {
+  const loginFails = /* @__PURE__ */ new Map();
+  app2.post("/api/admin/login", (req, res) => {
+    const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+    const rec = loginFails.get(ip) || { n: 0, lockedUntil: 0 };
+    if (rec.lockedUntil > Date.now()) {
+      res.status(429).json({ error: "\u0E1E\u0E22\u0E32\u0E22\u0E32\u0E21\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E1C\u0E34\u0E14\u0E2B\u0E25\u0E32\u0E22\u0E04\u0E23\u0E31\u0E49\u0E07 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E2D 15 \u0E19\u0E32\u0E17\u0E35\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48" });
+      return;
+    }
     const { username, email, passcode } = req.body || {};
     if (ADMIN_PASSCODE && String(username ?? email ?? "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() && String(passcode || "").trim() === ADMIN_PASSCODE) {
+      loginFails.delete(ip);
       const token = signAdminToken(ADMIN_EMAIL);
       res.json({
         token,
@@ -1819,14 +2276,20 @@ function createApp() {
       });
       return;
     }
+    rec.n += 1;
+    if (rec.n >= 5) {
+      rec.n = 0;
+      rec.lockedUntil = Date.now() + 15 * 60 * 1e3;
+    }
+    loginFails.set(ip, rec);
     res.status(401).json({
       error: "\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E2B\u0E23\u0E37\u0E2D\u0E23\u0E2B\u0E31\u0E2A\u0E1C\u0E48\u0E32\u0E19\u0E1C\u0E39\u0E49\u0E14\u0E39\u0E41\u0E25\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07"
     });
   });
-  app.post("/api/admin/logout", requireAdmin, (req, res) => {
+  app2.post("/api/admin/logout", requireAdmin, (req, res) => {
     res.json({ success: true });
   });
-  app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
+  app2.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
     const enrichedSlots = enrichRajaSlotsForAdmin();
     const totalOrders = store.orders.length;
     const pendingOrders = store.orders.filter(
@@ -1859,7 +2322,7 @@ function createApp() {
       inquiries: store.inquiries
     });
   });
-  app.patch(
+  app2.patch(
     "/api/admin/raja-slots/:slotNumber",
     requireAdmin,
     (req, res) => {
@@ -1891,7 +2354,7 @@ function createApp() {
       });
     }
   );
-  app.post("/api/admin/products", requireAdmin, (req, res) => {
+  app2.post("/api/admin/products", requireAdmin, (req, res) => {
     const body = req.body || {};
     if (!body.name || !body.code || !body.series || Number(body.price) <= 0) {
       res.status(400).json({
@@ -1958,7 +2421,7 @@ function createApp() {
     saveStore(store);
     res.status(201).json({ product: newProduct });
   });
-  app.put("/api/admin/products/:id", requireAdmin, (req, res) => {
+  app2.put("/api/admin/products/:id", requireAdmin, (req, res) => {
     const idx = store.products.findIndex((p) => p.id === req.params.id);
     if (idx === -1) {
       res.status(404).json({ error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25\u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E41\u0E01\u0E49\u0E44\u0E02" });
@@ -1992,7 +2455,7 @@ function createApp() {
     saveStore(store);
     res.json({ product: updated });
   });
-  app.delete("/api/admin/products/:id", requireAdmin, (req, res) => {
+  app2.delete("/api/admin/products/:id", requireAdmin, (req, res) => {
     const idx = store.products.findIndex((p) => p.id === req.params.id);
     if (idx === -1) {
       res.status(404).json({ error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2A\u0E34\u0E19\u0E04\u0E49\u0E32" });
@@ -2002,7 +2465,124 @@ function createApp() {
     saveStore(store);
     res.json({ success: true });
   });
-  app.patch("/api/admin/orders/:id/status", requireAdmin, (req, res) => {
+  app2.post("/api/admin/orders", requireAdmin, (req, res) => {
+    purgeExpiredRajaSlotHolds();
+    const b = req.body || {};
+    const cleanOrg = String(b.organization || "").trim() || "\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19\u0E17\u0E31\u0E48\u0E27\u0E44\u0E1B";
+    const delivery = b.deliveryMethod === "shipping" ? "shipping" : "pickup_bpp";
+    const method = ["promptpay", "bank_transfer", "cash"].includes(b.paymentMethod) ? b.paymentMethod : "cash";
+    const rawAddress = String(b.shippingAddress || "").trim();
+    const form = validateCheckoutForm({
+      customerName: b.customerName,
+      organization: cleanOrg,
+      customerPhone: b.customerPhone,
+      deliveryMethod: delivery,
+      shippingAddress: rawAddress || cleanOrg,
+      postalCode: b.postalCode || "",
+      paymentMethod: method
+    });
+    if (!form.valid) {
+      res.status(400).json({
+        error: Object.values(form.fieldErrors)[0] || "\u0E01\u0E23\u0E38\u0E13\u0E32\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E1C\u0E39\u0E49\u0E0B\u0E37\u0E49\u0E2D\u0E43\u0E2B\u0E49\u0E04\u0E23\u0E1A\u0E16\u0E49\u0E27\u0E19",
+        fieldErrors: form.fieldErrors
+      });
+      return;
+    }
+    const calc = calculateOrderTotals(
+      Array.isArray(b.items) ? b.items : [],
+      store.products,
+      delivery === "pickup_bpp" ? 0 : store.siteConfig.standardShippingFee,
+      store.siteConfig.freeShippingThreshold
+    );
+    if (!calc.valid) {
+      res.status(400).json({ error: calc.errors[0] || "\u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E44\u0E14\u0E49", errors: calc.errors });
+      return;
+    }
+    for (const num of calc.selectedNumbers) {
+      const slot = store.rajaSlots.find((x) => x.slotNumber === num);
+      if (!slot) {
+        res.status(400).json({ error: `\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E0A\u0E38\u0E14 #${num} \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07` });
+        return;
+      }
+      if (slot.status !== "available") {
+        res.status(409).json({
+          error: `\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02 #${num} ${slot.status === "booked" ? "\u0E16\u0E39\u0E01\u0E08\u0E2D\u0E07\u0E44\u0E1B\u0E41\u0E25\u0E49\u0E27" : "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E16\u0E39\u0E01\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2D\u0E22\u0E39\u0E48"} \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E2D\u0E37\u0E48\u0E19`
+        });
+        return;
+      }
+    }
+    const now = Date.now();
+    const nowIso = new Date(now).toISOString();
+    let orderNumber = "";
+    do {
+      orderNumber = `BPP-2569-${Math.floor(1e3 + Math.random() * 9e3)}`;
+    } while (store.orders.some((o) => o.orderNumber === orderNumber));
+    applyBookingEffects(calc, orderNumber, "admin", nowIso);
+    const paid = b.paid === true;
+    const note = String(b.note || "").trim().slice(0, 300);
+    const pickupText = "\u0E21\u0E32\u0E23\u0E31\u0E1A\u0E40\u0E2D\u0E07\u0E17\u0E35\u0E48 \u0E1A\u0E0A.\u0E15\u0E0A\u0E14. (\u0E01\u0E2D\u0E07\u0E1A\u0E31\u0E0D\u0E0A\u0E32\u0E01\u0E32\u0E23\u0E15\u0E33\u0E23\u0E27\u0E08\u0E15\u0E23\u0E30\u0E40\u0E27\u0E19\u0E0A\u0E32\u0E22\u0E41\u0E14\u0E19 \u0E16\u0E19\u0E19\u0E1E\u0E2B\u0E25\u0E42\u0E22\u0E18\u0E34\u0E19 \u0E1E\u0E0D\u0E32\u0E44\u0E17 \u0E01\u0E23\u0E38\u0E07\u0E40\u0E17\u0E1E\u0E2F 10400)";
+    const newOrder = {
+      id: `ord-${now}`,
+      orderNumber,
+      createdAt: nowIso,
+      reservationDateThai: formatThaiDate(nowIso),
+      customerName: String(b.customerName).trim(),
+      organization: cleanOrg,
+      customerPhone: String(b.customerPhone).trim(),
+      customerEmail: b.customerEmail ? String(b.customerEmail).trim().slice(0, 120) : void 0,
+      deliveryMethod: delivery,
+      shippingAddress: delivery === "pickup_bpp" ? rawAddress ? `${pickupText} \u2014 \u0E2B\u0E21\u0E32\u0E22\u0E40\u0E2B\u0E15\u0E38: ${rawAddress}` : pickupText : rawAddress,
+      postalCode: delivery === "pickup_bpp" ? "10400" : String(b.postalCode || "").trim(),
+      paymentMethod: method,
+      transferReference: method === "cash" ? "\u0E40\u0E07\u0E34\u0E19\u0E2A\u0E14 / \u0E0A\u0E33\u0E23\u0E30\u0E01\u0E31\u0E1A\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48" : void 0,
+      items: calc.lineItems,
+      selectedNumbers: calc.selectedNumbers.length > 0 ? calc.selectedNumbers : void 0,
+      subtotal: calc.subtotal,
+      shippingTotal: calc.shippingTotal,
+      grandTotal: calc.grandTotal,
+      grandTotalThaiText: numberToThaiBahtText(calc.grandTotal),
+      paymentStatus: paid ? "verified_paid" : "pending_verification",
+      preparationStatus: paid ? "inspecting_artifact" : "awaiting_payment",
+      shippingStatus: "not_shipped",
+      salesChannel: "admin",
+      adminNote: note || void 0,
+      statusHistory: [
+        {
+          id: `log-${now}`,
+          timestamp: nowIso,
+          actor: "\u0E1C\u0E39\u0E49\u0E14\u0E39\u0E41\u0E25\u0E23\u0E30\u0E1A\u0E1A (\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E41\u0E17\u0E19\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32)",
+          paymentStatus: paid ? "verified_paid" : "pending_verification",
+          preparationStatus: paid ? "inspecting_artifact" : "awaiting_payment",
+          shippingStatus: "not_shipped",
+          note: `\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E43\u0E1A\u0E08\u0E2D\u0E07${calc.selectedNumbers.length ? ` \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E25\u0E47\u0E2D\u0E01\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02 ${calc.selectedNumbers.map((n) => "#" + n).join(", ")}` : ""}${paid ? " \u0E41\u0E25\u0E30\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E27\u0E48\u0E32\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E49\u0E27" : " \u0E23\u0E2D\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19"}${note ? ` \xB7 ${note}` : ""}`
+        }
+      ],
+      isDemoOrder: false
+    };
+    store.orders.unshift(newOrder);
+    saveStore(store);
+    res.status(201).json({ order: newOrder, rajaSlots: enrichRajaSlotsForAdmin() });
+  });
+  app2.get("/api/admin/orders/:id/slip", requireAdmin, async (req, res) => {
+    try {
+      const order = store.orders.find((o) => o.id === req.params.id);
+      if (!order) {
+        res.status(404).json({ error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07" });
+        return;
+      }
+      const rec = await readSlip(order.id);
+      if (!rec) {
+        res.status(404).json({ error: "\u0E1C\u0E39\u0E49\u0E08\u0E2D\u0E07\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E41\u0E19\u0E1A\u0E2A\u0E25\u0E34\u0E1B" });
+        return;
+      }
+      res.set("Cache-Control", "private, no-store");
+      res.json({ dataUrl: rec.dataUrl, uploadedAt: rec.uploadedAt });
+    } catch (err) {
+      console.error("Slip read failed:", err);
+      res.status(500).json({ error: "\u0E40\u0E1B\u0E34\u0E14\u0E2A\u0E25\u0E34\u0E1B\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08" });
+    }
+  });
+  app2.patch("/api/admin/orders/:id/status", requireAdmin, (req, res) => {
     const order = store.orders.find((o) => o.id === req.params.id);
     if (!order) {
       res.status(404).json({ error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07" });
@@ -2070,7 +2650,7 @@ function createApp() {
     saveStore(store);
     res.json({ order, rajaSlots: enrichRajaSlotsForAdmin() });
   });
-  app.put("/api/admin/config", requireAdmin, (req, res) => {
+  app2.put("/api/admin/config", requireAdmin, (req, res) => {
     const updates = req.body || {};
     store.siteConfig = {
       ...store.siteConfig,
@@ -2083,7 +2663,7 @@ function createApp() {
     saveStore(store);
     res.json({ siteConfig: store.siteConfig });
   });
-  app.post("/api/admin/news", requireAdmin, (req, res) => {
+  app2.post("/api/admin/news", requireAdmin, (req, res) => {
     const {
       title,
       category,
@@ -2113,7 +2693,7 @@ function createApp() {
     saveStore(store);
     res.status(201).json({ article });
   });
-  app.delete("/api/admin/news/:id", requireAdmin, (req, res) => {
+  app2.delete("/api/admin/news/:id", requireAdmin, (req, res) => {
     const idx = store.news.findIndex((n) => n.id === req.params.id);
     if (idx !== -1) {
       store.news.splice(idx, 1);
@@ -2121,12 +2701,12 @@ function createApp() {
     }
     res.json({ success: true });
   });
-  return app;
+  return app2;
 }
 async function startServer() {
-  const app = createApp();
+  const app2 = createApp();
   const PORT = Number(process.env.PORT) || 3e3;
-  if (!useFirestore) {
+  if (!useRemoteStore) {
     setInterval(() => {
       purgeExpiredRajaSlotHolds();
     }, 15e3);
@@ -2137,15 +2717,15 @@ async function startServer() {
       server: { middlewareMode: true },
       appType: "spa"
     });
-    app.use(vite.middlewares);
+    app2.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
+    app2.use(express.static(distPath));
+    app2.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
-  app.listen(PORT, process.env.HOST || "0.0.0.0", () => {
+  app2.listen(PORT, process.env.HOST || "0.0.0.0", () => {
     console.log(`Sacred Heritage Store Server running on http://localhost:${PORT}`);
   });
 }
@@ -2154,7 +2734,16 @@ if (!process.env.VERCEL && !process.env.BPP_NO_LISTEN) {
 }
 
 // api-src/index.ts
-var index_default = createApp();
+var app = createApp();
+function handler(req, res) {
+  const url = new URL(req.url || "/", "http://localhost");
+  const original = url.searchParams.get("__p");
+  if (original !== null) {
+    url.searchParams.delete("__p");
+    req.url = `/api/${original}${url.search}`;
+  }
+  return app(req, res);
+}
 export {
-  index_default as default
+  handler as default
 };

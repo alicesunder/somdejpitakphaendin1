@@ -4,7 +4,12 @@
  */
 
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Heart } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Heart } from 'lucide-react';
+import {
+  BOOKING_CLOSED_MESSAGE,
+  BOOKING_OPEN_DATE_TEXT,
+  isBookingOpen,
+} from './config/booking';
 import {
   createInitialRajaSlots,
   initialNews,
@@ -25,6 +30,8 @@ import {
 } from './utils/commerceRules';
 import { AppView, Header } from './components/Header';
 import { Footer } from './components/Footer';
+import { IntroSplash } from './components/IntroSplash';
+import { MobileTabBar } from './components/MobileTabBar';
 import { HomeView } from './components/HomeView';
 import { CatalogView } from './components/CatalogView';
 import { ProductDetailView } from './components/ProductDetailView';
@@ -111,6 +118,14 @@ export default function App() {
   });
 
   const [cartToast, setCartToast] = useState<string | null>(null);
+  const [bookingOpen, setBookingOpen] = useState(() => isBookingOpen());
+  useEffect(() => {
+    if (bookingOpen) return;
+    const timer = window.setInterval(() => {
+      if (isBookingOpen()) setBookingOpen(true);
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [bookingOpen]);
   const [wishlistToast, setWishlistToast] = useState<string | null>(null);
 
   const fetchStoreBootstrap = useCallback(async () => {
@@ -146,27 +161,7 @@ export default function App() {
       } catch {
         // ignore network error
       }
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  // Periodic 15-minute hold expiry check (every 15 seconds)
-  useEffect(() => {
-    const timer = window.setInterval(async () => {
-      try {
-        const res = await fetch('/api/raja-slots/release-expired', {
-          method: 'POST',
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.releasedCount > 0 && Array.isArray(data.rajaSlots)) {
-            setRajaSlots(data.rajaSlots);
-          }
-        }
-      } catch {
-        // ignore network error
-      }
-    }, 15000);
+    }, 60000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -287,6 +282,20 @@ export default function App() {
     [cart]
   );
 
+  // The back office is not linked anywhere public: staff open it with /#admin
+  useEffect(() => {
+    const check = () => {
+      if (window.location.hash === '#admin') {
+        setCurrentView('admin');
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+        window.scrollTo(0, 0);
+      }
+    };
+    check();
+    window.addEventListener('hashchange', check);
+    return () => window.removeEventListener('hashchange', check);
+  }, []);
+
   const handleNavigate = (view: AppView) => {
     setCurrentView(view);
     if (view !== 'news') {
@@ -324,6 +333,9 @@ export default function App() {
     async (
       slotNumber: number
     ): Promise<{ success: boolean; error?: string }> => {
+      if (!bookingOpen) {
+        return { success: false, error: BOOKING_CLOSED_MESSAGE };
+      }
       try {
         const res = await fetch('/api/raja-slots/toggle', {
           method: 'POST',
@@ -358,6 +370,11 @@ export default function App() {
   );
 
   const handleAddToCart = (product: AmuletProduct, quantity = 1) => {
+    if (!bookingOpen) {
+      setCartToast(BOOKING_CLOSED_MESSAGE);
+      setTimeout(() => setCartToast(null), 4000);
+      return;
+    }
     if (product.requiresNumberSelection) {
       if (selectedRajaNumbers.length === 0) {
         setGlobalRajaModalOpen(true);
@@ -397,6 +414,11 @@ export default function App() {
   };
 
   const handleBuyNow = (product: AmuletProduct, quantity = 1) => {
+    if (!bookingOpen) {
+      setCartToast(BOOKING_CLOSED_MESSAGE);
+      setTimeout(() => setCartToast(null), 4000);
+      return;
+    }
     if (product.requiresNumberSelection && selectedRajaNumbers.length === 0) {
       setGlobalRajaModalOpen(true);
       return;
@@ -473,7 +495,18 @@ export default function App() {
   }, [products, activeProduct]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#080705] text-[#F7F2E8]">
+    <div
+      className={`min-h-screen flex flex-col bg-[#080705] text-[#F7F2E8] ${
+        currentView === 'admin' ? '' : 'pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0'
+      }`}
+    >
+      <IntroSplash
+        title={
+          !siteConfig.brandTitleThai || siteConfig.brandTitleThai === 'วัตถุมงคล ตชด.'
+            ? 'สมเด็จพิทักษ์แผ่นดิน'
+            : siteConfig.brandTitleThai
+        }
+      />
       <div className="no-print">
         <Header
           currentView={currentView}
@@ -487,12 +520,29 @@ export default function App() {
         />
       </div>
 
+      {!bookingOpen && (
+        <div
+          role="status"
+          className="no-print bg-gradient-to-r from-[#2B2112] via-[#3A2C14] to-[#2B2112] border-b border-[#C9A45C]/60 text-[#FCE694]"
+        >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-center gap-3 text-center">
+            <CalendarClock className="w-5 h-5 shrink-0" aria-hidden="true" />
+            <p className="text-sm sm:text-base font-bold leading-snug">
+              ยังไม่เปิดให้จอง
+              <span className="block sm:inline sm:ml-2 font-semibold text-[#F7F2E8]">
+                เปิดให้จองวันที่ {BOOKING_OPEN_DATE_TEXT}
+              </span>
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Animated Floating Cart & Wishlist Feedback Toasts */}
       {cartToast && (
         <div
           role="status"
           aria-live="polite"
-          className="no-print fixed bottom-5 right-5 z-50 sacred-shrine-pedestal animate-sacred-reveal text-[#F7F2E8] px-4 py-3.5 rounded-xl flex items-center gap-3 text-xs sm:text-sm"
+          className="no-print fixed bottom-24 md:bottom-5 right-4 md:right-5 max-w-[calc(100vw-2rem)] z-50 sacred-shrine-pedestal animate-sacred-reveal text-[#F7F2E8] px-4 py-3.5 rounded-xl flex items-center gap-3 text-xs sm:text-sm"
         >
           <CheckCircle2 className="w-4 h-4 text-[#FCE694] shrink-0" />
           <span>{cartToast}</span>
@@ -510,7 +560,7 @@ export default function App() {
         <div
           role="status"
           aria-live="polite"
-          className="no-print fixed bottom-5 right-5 z-50 sacred-shrine-pedestal animate-sacred-reveal text-[#F7F2E8] px-4 py-3.5 rounded-xl flex items-center gap-3 text-xs sm:text-sm"
+          className="no-print fixed bottom-24 md:bottom-5 right-4 md:right-5 max-w-[calc(100vw-2rem)] z-50 sacred-shrine-pedestal animate-sacred-reveal text-[#F7F2E8] px-4 py-3.5 rounded-xl flex items-center gap-3 text-xs sm:text-sm"
         >
           <Heart className="w-4 h-4 text-[#FCE694] fill-[#FCE694] shrink-0" />
           <span>{wishlistToast}</span>
@@ -584,6 +634,7 @@ export default function App() {
           {currentView === 'checkout' && (
             <div className="bg-[#080705] text-[#F7F2E8] min-h-screen">
               <CartCheckoutView
+                bookingOpen={bookingOpen}
                 cart={cart}
                 products={products}
                 rajaSlots={rajaSlots}
@@ -602,7 +653,7 @@ export default function App() {
           )}
 
           {currentView === 'tracking' && (
-            <OrderTrackingView initialOrderNumber={trackingOrderNumber} />
+            <OrderTrackingView initialOrderNumber={trackingOrderNumber} paymentChannels={siteConfig.paymentChannels} />
           )}
 
           {currentView === 'about' && (
@@ -655,6 +706,13 @@ export default function App() {
 
       <div className="no-print">
         <Footer siteConfig={siteConfig} onNavigate={handleNavigate} />
+        {currentView !== 'admin' && (
+          <MobileTabBar
+            currentView={currentView}
+            onNavigate={handleNavigate}
+            cartCount={totalCartCount}
+          />
+        )}
       </div>
 
       {/* Global 1-99 Number Selection Modal for ช1 ชุดทองคำใหญ่ราชาฤกษ์ */}

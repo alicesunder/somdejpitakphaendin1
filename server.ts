@@ -35,6 +35,9 @@ import {
   createFirestoreStore,
   isFirestoreConfigured,
 } from './server/firestoreStore';
+import { createPostgresStore, isPostgresConfigured } from './server/postgresStore';
+import { HitFn, memoryHit, rateLimiter } from './server/rateLimit';
+import { BOOKING_CLOSED_MESSAGE, isBookingOpen } from './src/config/booking';
 
 interface StoreData {
   siteConfig: SiteConfig;
@@ -45,16 +48,23 @@ interface StoreData {
   inquiries: ContactInquiry[];
 }
 
-// Production (Vercel) persists to Firestore; local dev falls back to a JSON file.
-const useFirestore = isFirestoreConfigured();
-const firestoreStore = useFirestore
-  ? createFirestoreStore(() => ({
-      siteConfig: structuredClone(initialSiteConfig),
-      products: structuredClone(initialProducts),
-      rajaSlots: createInitialRajaSlots(),
-      news: structuredClone(initialNews),
-    }))
+// Production (Vercel) persists to Supabase Postgres (DATABASE_URL), or Firestore when only that
+// is configured; local dev falls back to a JSON file. With both set, the first start copies the
+// Firestore data into an empty Postgres database.
+const seedStore = () => ({
+  siteConfig: structuredClone(initialSiteConfig),
+  products: structuredClone(initialProducts),
+  rajaSlots: createInitialRajaSlots(),
+  news: structuredClone(initialNews),
+});
+const legacyFirestore = isFirestoreConfigured() ? createFirestoreStore(seedStore) : null;
+const postgresStore = isPostgresConfigured()
+  ? createPostgresStore(seedStore, legacyFirestore ? legacyFirestore.exportAll : undefined)
   : null;
+const remoteStore = postgresStore ?? legacyFirestore;
+const useRemoteStore = remoteStore !== null;
+// Rate-limit counters are shared through Postgres; without it each instance counts on its own.
+const rateLimitHit: HitFn = postgresStore ? postgresStore.hit : memoryHit();
 
 const DATA_DIR = path.resolve(process.cwd(), '.data');
 const DATA_FILE = path.join(DATA_DIR, 'heritage_store_v6.json');
@@ -109,8 +119,8 @@ function loadStore(): StoreData {
 }
 
 function saveStore(data: StoreData): void {
-  // Firestore mode: changes are diffed and persisted before each API response.
-  if (useFirestore) return;
+  // Database mode: changes are diffed and persisted before each API response.
+  if (useRemoteStore) return;
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -123,7 +133,7 @@ function saveStore(data: StoreData): void {
   }
 }
 
-const store: StoreData = useFirestore
+const store: StoreData = useRemoteStore
   ? {
       siteConfig: structuredClone(initialSiteConfig),
       products: [],
@@ -268,10 +278,101 @@ function enrichRajaSlotsForAdmin(): RajaSetSlot[] {
   });
 }
 
+// BOOKING_OPENS_AT (ISO date) can override the default opening time via the environment.
+function bookingOpen(): boolean {
+  return isBookingOpen(Date.now(), process.env.BOOKING_OPENS_AT || undefined);
+}
+
+const SLIP_DIR = path.join(DATA_DIR, 'slips');
+const slipFile = (orderId: string) => path.join(SLIP_DIR, `${orderId.replace(/[^\w-]/g, '_')}.json`);
+
+interface SlipRecord {
+  orderId: string;
+  orderNumber: string;
+  dataUrl: string;
+  uploadedAt: string;
+}
+
+async function writeSlip(rec: SlipRecord): Promise<void> {
+  if (remoteStore) {
+    await remoteStore.saveSlip(rec.orderId, rec as unknown as Record<string, unknown>);
+    return;
+  }
+  fs.mkdirSync(SLIP_DIR, { recursive: true });
+  fs.writeFileSync(slipFile(rec.orderId), JSON.stringify(rec), 'utf-8');
+}
+
+async function readSlip(orderId: string): Promise<SlipRecord | null> {
+  if (remoteStore) return (await remoteStore.getSlip(orderId)) as SlipRecord | null;
+  try {
+    return JSON.parse(fs.readFileSync(slipFile(orderId), 'utf-8')) as SlipRecord;
+  } catch {
+    return null;
+  }
+}
+
+const SLIP_MAX_CHARS = 900_000;
+const SLIP_MAX_UPLOADS = 5;
+
+/** Accepts only small JPEG/PNG/WebP data URLs whose bytes really start like that image type. */
+function parseSlipDataUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length > SLIP_MAX_CHARS) return null;
+  const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(raw);
+  if (!m) return null;
+  const head = Buffer.from(m[2].slice(0, 24), 'base64');
+  const ok =
+    (m[1] === 'jpeg' && head[0] === 0xff && head[1] === 0xd8) ||
+    (m[1] === 'png' && head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) ||
+    (m[1] === 'webp' && head.subarray(0, 4).toString('ascii') === 'RIFF' && head.subarray(8, 12).toString('ascii') === 'WEBP');
+  return ok ? raw : null;
+}
+
+/** Locks the chosen 1–99 numbers as booked and moves stock / booked counters for a new order. */
+function applyBookingEffects(
+  calc: { selectedNumbers: number[]; lineItems: { productId: string; quantity: number }[] },
+  orderNumber: string,
+  sessionId: string,
+  nowIso: string
+) {
+  for (const num of calc.selectedNumbers) {
+    const slot = store.rajaSlots.find((s) => s.slotNumber === num);
+    if (slot) {
+      slot.status = 'booked';
+      slot.sessionId = sessionId;
+      slot.heldUntil = 0;
+      slot.orderNumber = orderNumber;
+      slot.updatedAt = nowIso;
+    }
+  }
+  for (const line of calc.lineItems) {
+    const prod = store.products.find((p) => p.id === line.productId);
+    if (prod) {
+      prod.bookedCount = (prod.bookedCount || 0) + line.quantity;
+      if (prod.requiresNumberSelection) {
+        const totalBookedSlots = store.rajaSlots.filter((s) => s.status === 'booked').length;
+        prod.stock = Math.max(0, 99 - totalBookedSlots);
+      } else if (!prod.isMadeToOrder) {
+        prod.stock = Math.max(0, prod.stock - line.quantity);
+      }
+    }
+  }
+}
+
 export function createApp() {
   const app = express();
+  app.disable('x-powered-by');
 
   app.use(express.json({ limit: '2mb' }));
+  app.use('/api', (_req, res, next) => {
+    res.set({
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+    });
+    next();
+  });
+  // Before the queue below, so refused requests never wait for or touch the database.
+  app.use('/api', rateLimiter(() => rateLimitHit));
 
   // Every API request is handled one at a time per instance: load the latest
   // data, run the handler, and persist any changes *before* the response is sent
@@ -290,24 +391,38 @@ export function createApp() {
           next();
           return;
         }
-        if (process.env.VERCEL && !useFirestore) {
+        // Reservations are closed until the opening date: refuse before touching the database.
+        if (
+          req.method === 'POST' &&
+          (req.path === '/orders' || req.path === '/raja-slots/toggle') &&
+          !bookingOpen()
+        ) {
+          res.status(403).json({ error: BOOKING_CLOSED_MESSAGE, bookingClosed: true });
+          return;
+        }
+        if (process.env.VERCEL && !useRemoteStore) {
           res.status(503).json({
-            error: 'ระบบฐานข้อมูลยังไม่ได้ตั้งค่า (FIREBASE_SERVICE_ACCOUNT)',
+            error: 'ระบบฐานข้อมูลยังไม่ได้ตั้งค่า (DATABASE_URL)',
           });
           return;
         }
-        if (firestoreStore) {
+        if (remoteStore) {
           const cols: ColName[] = [];
           if (req.path.startsWith('/orders') || req.path.startsWith('/admin')) {
             cols.push('orders');
           }
           if (req.path.startsWith('/admin')) cols.push('inquiries');
-          await firestoreStore.load(store as unknown as Record<string, any>, cols);
+          const publicRead =
+            req.method === 'GET' &&
+            (req.path === '/bootstrap' || req.path === '/raja-slots');
+          await remoteStore.load(store as unknown as Record<string, any>, cols, {
+            maxAgeMs: publicRead ? 60_000 : 0,
+          });
         }
-        if (firestoreStore) {
+        if (remoteStore) {
           const originalJson = res.json.bind(res);
           res.json = ((body?: unknown) => {
-            firestoreStore
+            remoteStore
               .persist(store as unknown as Record<string, any>)
               .then(() => originalJson(body))
               .catch((err: any) => {
@@ -332,6 +447,7 @@ export function createApp() {
 
   // 1. Public Storefront Bootstrap
   app.get('/api/bootstrap', (_req, res) => {
+    res.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
     purgeExpiredRajaSlotHolds();
     const publicProducts = store.products.filter((p) => p.isVisible);
     res.json({
@@ -345,6 +461,7 @@ export function createApp() {
 
   // 1b. Public Raja Slots (1–99) Real-time Status & Atomic Hold/Release
   app.get('/api/raja-slots', (_req, res) => {
+    res.set('Cache-Control', 'public, s-maxage=20, stale-while-revalidate=60');
     purgeExpiredRajaSlotHolds();
     res.json({
       rajaSlots: store.rajaSlots,
@@ -353,6 +470,10 @@ export function createApp() {
   });
 
   app.post('/api/raja-slots/toggle', (req, res) => {
+    if (!bookingOpen()) {
+      res.status(403).json({ error: BOOKING_CLOSED_MESSAGE, bookingClosed: true });
+      return;
+    }
     purgeExpiredRajaSlotHolds();
     const { slotNumber, sessionId } = req.body || {};
     const num = Number(slotNumber);
@@ -441,6 +562,10 @@ export function createApp() {
 
   // 3. Create Order (Server-side validation, atomic number lock 1-99, stock check, idempotency)
   app.post('/api/orders', (req, res) => {
+    if (!bookingOpen()) {
+      res.status(403).json({ error: BOOKING_CLOSED_MESSAGE, bookingClosed: true });
+      return;
+    }
     purgeExpiredRajaSlotHolds();
     const {
       items,
@@ -556,33 +681,7 @@ export function createApp() {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const orderNumber = `BPP-2569-${randomSuffix}`;
 
-    // Lock selected Raja slots (1-99) atomically as 'booked'
-    for (const num of calc.selectedNumbers) {
-      const slot = store.rajaSlots.find((s) => s.slotNumber === num);
-      if (slot) {
-        slot.status = 'booked';
-        slot.sessionId = cleanSession;
-        slot.heldUntil = 0;
-        slot.orderNumber = orderNumber;
-        slot.updatedAt = nowIso;
-      }
-    }
-
-    // Deduct stock for limited items and increment bookedCount for all items
-    for (const line of calc.lineItems) {
-      const prod = store.products.find((p) => p.id === line.productId);
-      if (prod) {
-        prod.bookedCount = (prod.bookedCount || 0) + line.quantity;
-        if (prod.requiresNumberSelection) {
-          const totalBookedSlots = store.rajaSlots.filter(
-            (s) => s.status === 'booked'
-          ).length;
-          prod.stock = Math.max(0, 99 - totalBookedSlots);
-        } else if (!prod.isMadeToOrder) {
-          prod.stock = Math.max(0, prod.stock - line.quantity);
-        }
-      }
-    }
+    applyBookingEffects(calc, orderNumber, cleanSession, nowIso);
 
     const reservationDateThai = formatThaiDate(nowIso);
     const grandTotalThaiText = numberToThaiBahtText(calc.grandTotal);
@@ -696,6 +795,62 @@ export function createApp() {
     });
   });
 
+  // 4b. Customer attaches / replaces the payment slip (proved by order number + last 4 phone digits)
+  app.post('/api/orders/slip', async (req, res) => {
+    try {
+      const { orderNumber, phoneVerify, image, transferAmount, transferTime } = req.body || {};
+      const order = store.orders.find(
+        (o) => o.orderNumber.toUpperCase() === String(orderNumber || '').trim().toUpperCase()
+      );
+      if (!order || !verifyPhoneLast4(order.customerPhone, String(phoneVerify || ''))) {
+        res.status(404).json({ error: 'ไม่พบใบจองที่ตรงกับเลขที่ใบจองและเบอร์โทร 4 ตัวท้าย' });
+        return;
+      }
+      if (order.paymentStatus === 'verified_paid') {
+        res.status(409).json({ error: 'ใบจองนี้ได้รับการยืนยันการชำระเงินแล้ว ไม่ต้องแนบสลิปเพิ่ม' });
+        return;
+      }
+      if (order.paymentStatus === 'payment_rejected') {
+        res.status(409).json({ error: 'ใบจองนี้ถูกยกเลิกแล้ว กรุณาติดต่อเจ้าหน้าที่หรือจองใหม่' });
+        return;
+      }
+      if ((order.slipCount || 0) >= SLIP_MAX_UPLOADS) {
+        res.status(429).json({ error: 'แนบสลิปครบจำนวนครั้งที่กำหนดแล้ว กรุณาติดต่อเจ้าหน้าที่' });
+        return;
+      }
+      const dataUrl = parseSlipDataUrl(image);
+      if (!dataUrl) {
+        res.status(400).json({ error: 'ไฟล์สลิปไม่ถูกต้องหรือใหญ่เกินไป (รองรับ JPG / PNG / WebP)' });
+        return;
+      }
+      const amount = Number(transferAmount);
+      const when = String(transferTime || '').trim().slice(0, 40);
+      const nowIso = new Date().toISOString();
+
+      await writeSlip({ orderId: order.id, orderNumber: order.orderNumber, dataUrl, uploadedAt: nowIso });
+      order.slipUploadedAt = nowIso;
+      order.slipCount = (order.slipCount || 0) + 1;
+      order.slipTransferAmount = Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : undefined;
+      order.slipTransferTime = when || undefined;
+      order.statusHistory.unshift({
+        id: `log-${Date.now()}`,
+        timestamp: nowIso,
+        actor: 'ผู้จอง (แนบสลิป)',
+        paymentStatus: order.paymentStatus,
+        preparationStatus: order.preparationStatus,
+        shippingStatus: order.shippingStatus,
+        note: `แนบหลักฐานการโอนเงิน (ครั้งที่ ${order.slipCount})${
+          order.slipTransferAmount ? ` ยอด ฿${order.slipTransferAmount.toLocaleString()}` : ''
+        }${when ? ` เวลาโอน ${when}` : ''} รอเจ้าหน้าที่ตรวจสอบ`,
+      });
+      saveStore(store);
+      res.status(201).json({ order: maskCustomerPII(order) });
+    } catch (err) {
+      console.error('Slip upload failed:', err);
+      res.status(500).json({ error: 'แนบสลิปไม่สำเร็จ กรุณาลองอีกครั้ง' });
+    }
+  });
+
   // 5. Public Contact Inquiry
   app.post('/api/inquiries', (req, res) => {
     const { name, phone, subject, message, orderNumber } = req.body || {};
@@ -722,13 +877,22 @@ export function createApp() {
   });
 
   // 6. Admin Authentication
+  // Brute-force guard: 5 wrong attempts from one address lock login for 15 minutes.
+  const loginFails = new Map<string, { n: number; lockedUntil: number }>();
   app.post('/api/admin/login', (req, res) => {
+    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+    const rec = loginFails.get(ip) || { n: 0, lockedUntil: 0 };
+    if (rec.lockedUntil > Date.now()) {
+      res.status(429).json({ error: 'พยายามเข้าสู่ระบบผิดหลายครั้ง กรุณารอ 15 นาทีแล้วลองใหม่' });
+      return;
+    }
     const { username, email, passcode } = req.body || {};
     if (
       ADMIN_PASSCODE &&
       String(username ?? email ?? '').trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() &&
       String(passcode || '').trim() === ADMIN_PASSCODE
     ) {
+      loginFails.delete(ip);
       const token = signAdminToken(ADMIN_EMAIL);
       res.json({
         token,
@@ -737,6 +901,12 @@ export function createApp() {
       return;
     }
 
+    rec.n += 1;
+    if (rec.n >= 5) {
+      rec.n = 0;
+      rec.lockedUntil = Date.now() + 15 * 60 * 1000;
+    }
+    loginFails.set(ip, rec);
     res.status(401).json({
       error: 'อีเมลหรือรหัสผ่านผู้ดูแลไม่ถูกต้อง',
     });
@@ -982,6 +1152,137 @@ export function createApp() {
     res.json({ success: true });
   });
 
+  // 8a. Admin creates an order for a customer (counter / phone / LINE sale), including numbers 1–99
+  app.post('/api/admin/orders', requireAdmin, (req, res) => {
+    purgeExpiredRajaSlotHolds();
+    const b = req.body || {};
+    const cleanOrg = String(b.organization || '').trim() || 'ประชาชนทั่วไป';
+    const delivery: 'shipping' | 'pickup_bpp' = b.deliveryMethod === 'shipping' ? 'shipping' : 'pickup_bpp';
+    const method: 'promptpay' | 'bank_transfer' | 'cash' = ['promptpay', 'bank_transfer', 'cash'].includes(b.paymentMethod)
+      ? b.paymentMethod
+      : 'cash';
+    const rawAddress = String(b.shippingAddress || '').trim();
+
+    const form = validateCheckoutForm({
+      customerName: b.customerName,
+      organization: cleanOrg,
+      customerPhone: b.customerPhone,
+      deliveryMethod: delivery,
+      shippingAddress: rawAddress || cleanOrg,
+      postalCode: b.postalCode || '',
+      paymentMethod: method,
+    });
+    if (!form.valid) {
+      res.status(400).json({
+        error: Object.values(form.fieldErrors)[0] || 'กรุณากรอกข้อมูลผู้ซื้อให้ครบถ้วน',
+        fieldErrors: form.fieldErrors,
+      });
+      return;
+    }
+
+    const calc = calculateOrderTotals(
+      Array.isArray(b.items) ? b.items : [],
+      store.products,
+      delivery === 'pickup_bpp' ? 0 : store.siteConfig.standardShippingFee,
+      store.siteConfig.freeShippingThreshold
+    );
+    if (!calc.valid) {
+      res.status(400).json({ error: calc.errors[0] || 'ไม่สามารถสร้างใบจองได้', errors: calc.errors });
+      return;
+    }
+
+    for (const num of calc.selectedNumbers) {
+      const slot = store.rajaSlots.find((x) => x.slotNumber === num);
+      if (!slot) {
+        res.status(400).json({ error: `หมายเลขชุด #${num} ไม่ถูกต้อง` });
+        return;
+      }
+      if (slot.status !== 'available') {
+        res.status(409).json({
+          error: `หมายเลข #${num} ${slot.status === 'booked' ? 'ถูกจองไปแล้ว' : 'กำลังถูกลูกค้าเลือกอยู่'} กรุณาเลือกหมายเลขอื่น`,
+        });
+        return;
+      }
+    }
+
+    const now = Date.now();
+    const nowIso = new Date(now).toISOString();
+    let orderNumber = '';
+    do {
+      orderNumber = `BPP-2569-${Math.floor(1000 + Math.random() * 9000)}`;
+    } while (store.orders.some((o) => o.orderNumber === orderNumber));
+
+    applyBookingEffects(calc, orderNumber, 'admin', nowIso);
+
+    const paid = b.paid === true;
+    const note = String(b.note || '').trim().slice(0, 300);
+    const pickupText = 'มารับเองที่ บช.ตชด. (กองบัญชาการตำรวจตระเวนชายแดน ถนนพหลโยธิน พญาไท กรุงเทพฯ 10400)';
+    const newOrder: OrderRecord = {
+      id: `ord-${now}`,
+      orderNumber,
+      createdAt: nowIso,
+      reservationDateThai: formatThaiDate(nowIso),
+      customerName: String(b.customerName).trim(),
+      organization: cleanOrg,
+      customerPhone: String(b.customerPhone).trim(),
+      customerEmail: b.customerEmail ? String(b.customerEmail).trim().slice(0, 120) : undefined,
+      deliveryMethod: delivery,
+      shippingAddress: delivery === 'pickup_bpp' ? (rawAddress ? `${pickupText} — หมายเหตุ: ${rawAddress}` : pickupText) : rawAddress,
+      postalCode: delivery === 'pickup_bpp' ? '10400' : String(b.postalCode || '').trim(),
+      paymentMethod: method,
+      transferReference: method === 'cash' ? 'เงินสด / ชำระกับเจ้าหน้าที่' : undefined,
+      items: calc.lineItems,
+      selectedNumbers: calc.selectedNumbers.length > 0 ? calc.selectedNumbers : undefined,
+      subtotal: calc.subtotal,
+      shippingTotal: calc.shippingTotal,
+      grandTotal: calc.grandTotal,
+      grandTotalThaiText: numberToThaiBahtText(calc.grandTotal),
+      paymentStatus: paid ? 'verified_paid' : 'pending_verification',
+      preparationStatus: paid ? 'inspecting_artifact' : 'awaiting_payment',
+      shippingStatus: 'not_shipped',
+      salesChannel: 'admin',
+      adminNote: note || undefined,
+      statusHistory: [
+        {
+          id: `log-${now}`,
+          timestamp: nowIso,
+          actor: 'ผู้ดูแลระบบ (สร้างใบจองแทนลูกค้า)',
+          paymentStatus: paid ? 'verified_paid' : 'pending_verification',
+          preparationStatus: paid ? 'inspecting_artifact' : 'awaiting_payment',
+          shippingStatus: 'not_shipped',
+          note: `เจ้าหน้าที่สร้างใบจอง${calc.selectedNumbers.length ? ` พร้อมล็อกหมายเลข ${calc.selectedNumbers.map((n) => '#' + n).join(', ')}` : ''}${
+            paid ? ' และบันทึกว่าชำระเงินแล้ว' : ' รอชำระเงิน'
+          }${note ? ` · ${note}` : ''}`,
+        },
+      ],
+      isDemoOrder: false,
+    };
+    store.orders.unshift(newOrder);
+    saveStore(store);
+    res.status(201).json({ order: newOrder, rajaSlots: enrichRajaSlotsForAdmin() });
+  });
+
+  // 8b. Admin views the payment slip of one order
+  app.get('/api/admin/orders/:id/slip', requireAdmin, async (req, res) => {
+    try {
+      const order = store.orders.find((o) => o.id === req.params.id);
+      if (!order) {
+        res.status(404).json({ error: 'ไม่พบรายการคำสั่งจอง' });
+        return;
+      }
+      const rec = await readSlip(order.id);
+      if (!rec) {
+        res.status(404).json({ error: 'ผู้จองยังไม่ได้แนบสลิป' });
+        return;
+      }
+      res.set('Cache-Control', 'private, no-store');
+      res.json({ dataUrl: rec.dataUrl, uploadedAt: rec.uploadedAt });
+    } catch (err) {
+      console.error('Slip read failed:', err);
+      res.status(500).json({ error: 'เปิดสลิปไม่สำเร็จ' });
+    }
+  });
+
   // 9. Admin Order Status & Tracking Update (With Audit Trail & Raja Slot Release on Reject)
   app.patch('/api/admin/orders/:id/status', requireAdmin, (req, res) => {
     const order = store.orders.find((o) => o.id === req.params.id);
@@ -1131,8 +1432,8 @@ async function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
 
   // Background interval to auto-release expired 15-minute slot holds (file mode only;
-  // in Firestore mode expiry is purged on each request).
-  if (!useFirestore) {
+  // in database mode expiry is purged on each request).
+  if (!useRemoteStore) {
     setInterval(() => {
       purgeExpiredRajaSlotHolds();
     }, 15_000);

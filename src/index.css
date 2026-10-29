@@ -198,6 +198,11 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  /* background-clip:text only paints inside the box: give Thai vowels/tone marks room so they are not cut */
+  padding: 0.3em 0.15em 0.25em;
+  margin: -0.3em -0.15em -0.25em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -339,3 +344,102 @@
   }
 }
 
+
+/* ---------- Entrance: intro splash + hero rise ---------- */
+@keyframes heroRise {
+  0% {
+    opacity: 0;
+    transform: translateY(22px);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.hero-rise {
+  animation: heroRise 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--d, 0ms);
+}
+
+/* While the opening splash is up, hold the hero's entrance until it lifts. */
+html.intro-playing .hero-rise {
+  animation-play-state: paused;
+}
+
+@keyframes introCrest {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes introTitle {
+  0%,
+  25% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes introLine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes introGlow {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.intro-crest {
+  animation: introCrest 1100ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.intro-title {
+  animation: introTitle 1300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.intro-line {
+  animation: introLine 1400ms ease-in-out infinite;
+}
+
+.intro-glow {
+  animation: introGlow 2200ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-rise,
+  .intro-crest,
+  .intro-title,
+  .intro-line,
+  .intro-glow {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}

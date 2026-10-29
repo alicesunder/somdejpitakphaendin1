@@ -79,11 +79,12 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex items-center gap-2.5 sm:gap-3.5 text-left group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E5C158] rounded min-w-0"
         >
           <BppCrestLogo className="w-11 h-10 sm:w-14 sm:h-12" />
-          <div className="leading-tight min-w-0">
-            <span className="block font-bpp-official text-xl sm:text-2xl lg:text-[1.75rem] font-bold tracking-wide text-gold-shimmer group-hover:brightness-110 transition-all truncate">
+          {/* Brand text only on phones; from sm up the crest alone leads (the text was being truncated) */}
+          <div className="leading-tight min-w-0 sm:hidden">
+            <span className="block font-bpp-official text-base leading-snug sm:text-2xl lg:text-[1.75rem] font-bold tracking-wide text-gold-shimmer group-hover:brightness-110 transition-all sm:break-words min-w-0">
               {displayBrandTitle}
             </span>
-            <span className="block font-bpp-motto text-[11px] sm:text-xs text-[#FCE694] tracking-wider truncate">
+            <span className="hidden sm:block font-bpp-motto text-[11px] sm:text-xs text-[#FCE694] tracking-wider break-words min-w-0">
               ศรัทธา • เกียรติภูมิ • แผ่นดิน · ๗๕ ปี ตชด.
             </span>
           </div>
@@ -138,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
             }}
             aria-label={`รายการวัตถุมงคลที่บันทึกไว้ จำนวน ${wishlistCount} รายการ`}
             title="รายการที่บันทึกไว้"
-            className="relative p-2 rounded-xl border border-[#C9A45C]/35 bg-[#16110B]/80 text-[#F7F2E8] hover:text-[#FCE694] hover:border-[#FCE694] transition-colors"
+            className="relative hidden sm:block p-2 rounded-xl border border-[#C9A45C]/35 bg-[#16110B]/80 text-[#F7F2E8] hover:text-[#FCE694] hover:border-[#FCE694] transition-colors"
           >
             <Heart
               className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${
@@ -152,20 +153,6 @@ export const Header: React.FC<HeaderProps> = ({
                 {wishlistCount}
               </span>
             )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigate('admin')}
-            aria-label="ระบบผู้ดูแลคลังวัตถุมงคล"
-            title={isAdminLoggedIn ? 'จัดการคลัง (Admin)' : 'สำหรับเจ้าหน้าที่ผู้ดูแล'}
-            className={`p-2 rounded-xl border transition-colors relative ${
-              currentView === 'admin' || isAdminLoggedIn
-                ? 'text-[#FCE694] bg-[#2B2112]/90 border-[#FCE694]'
-                : 'border-[#C9A45C]/35 bg-[#16110B]/80 text-[#F7F2E8]/90 hover:text-[#FCE694] hover:border-[#FCE694]'
-            }`}
-          >
-            <User className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           <button
@@ -241,7 +228,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onNavigate(item.id);
                 setMobileMenuOpen(false);
               }}
-              className={`w-full text-left px-4 py-2.5 rounded-xl font-bpp-official text-base tracking-wide transition-colors flex items-center justify-between ${
+              className={`w-full text-left px-4 py-3 min-h-[48px] rounded-xl font-bpp-official text-base tracking-wide transition-colors flex items-center justify-between ${
                 currentView === item.id
                   ? 'bg-[#2A2012] text-[#FCE694] border border-[#C9A45C]/65 font-bold'
                   : 'text-[#F7F2E8]/90 hover:bg-[#1E170D]'
@@ -250,6 +237,23 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{item.label}</span>
             </button>
           ))}
+          <div className="sm:hidden pt-2 mt-2 border-t border-[#C9A45C]/25 space-y-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenWishlist) {
+                  onOpenWishlist();
+                } else {
+                  onNavigate('catalog');
+                }
+                setMobileMenuOpen(false);
+              }}
+              className="w-full text-left px-4 py-3 min-h-[48px] rounded-xl font-bpp-official text-base text-[#F7F2E8]/90 hover:bg-[#1E170D] flex items-center justify-between"
+            >
+              <span>รายการที่บันทึกไว้</span>
+              <span className="font-tabular text-sm text-[#FCE694]">{wishlistCount}</span>
+            </button>
+          </div>
         </nav>
       )}
     </header>

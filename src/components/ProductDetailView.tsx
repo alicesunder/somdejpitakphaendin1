@@ -206,7 +206,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
             <div className="relative rounded-2xl overflow-hidden sacred-shrine-pedestal">
               {/* Top Inspection Toolbar */}
               <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 bg-[#15110B]/95 border-b border-[#C9A45C]/35 text-xs">
-                <span className="font-semibold text-[#FCE694] flex items-center gap-1.5 truncate">
+                <span className="font-semibold text-[#FCE694] flex items-center gap-1.5 break-words min-w-0">
                   <Sparkles className="w-3.5 h-3.5 text-[#FCE694] shrink-0" />
                   <span>
                     มุมมองที่ {currentIdx + 1}/{angleList.length}:{' '}
@@ -310,7 +310,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
 
               {/* Active Angle Caption Footer */}
               <div className="px-3.5 py-2.5 bg-[#15110B]/95 border-t border-[#C9A45C]/30 flex items-center justify-between gap-2 text-xs text-[#F7F2E8]/90">
-                <p className="truncate">{currentAngleObj?.caption}</p>
+                <p className="break-words min-w-0">{currentAngleObj?.caption}</p>
                 <button
                   type="button"
                   onClick={() => {
@@ -858,7 +858,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                       </button>
                     </div>
                     <div className="p-4 space-y-2">
-                      <h3 className="font-serif-heritage text-base font-bold text-[#FFFFFF] line-clamp-1">
+                      <h3 className="font-serif-heritage text-base font-bold text-[#FFFFFF] break-words">
                         {rel.code} {rel.name}
                       </h3>
                       <p className="text-xs text-[#E5C158]/80">{rel.categoryLabel}</p>
@@ -912,7 +912,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                   {currentAngleObj?.label})
                 </span>
               </div>
-              <h2 className="font-serif-heritage text-base sm:text-xl font-bold text-[#FCE694] truncate">
+              <h2 className="font-serif-heritage text-base sm:text-xl font-bold text-[#FCE694] break-words min-w-0">
                 {product.name} — {product.series}
               </h2>
             </div>

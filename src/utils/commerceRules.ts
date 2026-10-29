@@ -414,7 +414,7 @@ export interface CheckoutFormInput {
   deliveryMethod?: 'shipping' | 'pickup_bpp';
   shippingAddress?: string;
   postalCode?: string;
-  paymentMethod?: 'promptpay' | 'bank_transfer';
+  paymentMethod?: 'promptpay' | 'bank_transfer' | 'cash';
   transferReference?: string;
 }
 
@@ -472,7 +472,7 @@ export function validateCheckoutForm(input: CheckoutFormInput): {
   }
 
   const method = input.paymentMethod || 'promptpay';
-  if (method !== 'promptpay' && method !== 'bank_transfer') {
+  if (method !== 'promptpay' && method !== 'bank_transfer' && method !== 'cash') {
     fieldErrors.paymentMethod = 'กรุณาเลือกช่องทางชำระเงิน';
   }
 
@@ -522,6 +522,9 @@ export function maskCustomerPII(order: OrderRecord): PublicTrackedOrder {
     postalCode: order.postalCode,
     paymentMethod: order.paymentMethod,
     transferReference: order.transferReference,
+    slipUploadedAt: order.slipUploadedAt,
+    slipTransferAmount: order.slipTransferAmount,
+    slipTransferTime: order.slipTransferTime,
     items: order.items,
     selectedNumbers: order.selectedNumbers,
     subtotal: order.subtotal,

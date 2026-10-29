@@ -14,13 +14,17 @@ import {
   ShippingStatus,
 } from '../types';
 import { ThaiCornerBrackets } from './SacredArtwork';
+import { PaymentPanel } from './PaymentPanel';
+import { PaymentChannelConfig } from '../types';
 
 interface OrderTrackingViewProps {
   initialOrderNumber?: string;
+  paymentChannels?: PaymentChannelConfig;
 }
 
 export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   initialOrderNumber = '',
+  paymentChannels,
 }) => {
   const [orderNumber, setOrderNumber] = useState(initialOrderNumber);
   const [phoneVerify, setPhoneVerify] = useState('');
@@ -278,6 +282,15 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                 </p>
               </div>
             </div>
+
+            {paymentChannels && trackedOrder.paymentStatus === 'pending_verification' && (
+              <PaymentPanel
+                order={trackedOrder}
+                phoneVerify={phoneVerify}
+                channels={paymentChannels}
+                onOrderUpdated={(o) => setTrackedOrder(o)}
+              />
+            )}
 
             {/* Status History Log */}
             <div className="relative z-10 space-y-4">

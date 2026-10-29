@@ -3,6 +3,7 @@ import { Phone, MapPin, Clock, FileText } from 'lucide-react';
 import { SiteConfig } from '../types';
 import { AppView } from './Header';
 import { BppCrestLogo } from './SacredArtwork';
+import LineContact from './LineContact';
 
 interface FooterProps {
   siteConfig: SiteConfig;
@@ -151,6 +152,7 @@ export const Footer: React.FC<FooterProps> = ({ siteConfig, onNavigate }) => {
                 <Clock className="w-4 h-4 text-[#C9A45C] shrink-0 mt-0.5" />
                 <span>{siteConfig.contactHours}</span>
               </p>
+              <LineContact variant="compact" />
             </div>
           </div>
         </div>

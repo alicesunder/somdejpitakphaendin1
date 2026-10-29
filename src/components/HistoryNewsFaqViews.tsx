@@ -291,7 +291,7 @@ export const NewsStoriesView: React.FC<NewsStoriesViewProps> = ({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-4 border-b border-[#C9A45C]/30 pb-2.5">
-                <p className="font-serif-heritage text-sm sm:text-base font-bold text-[#FCE694] truncate">
+                <p className="font-serif-heritage text-sm sm:text-base font-bold text-[#FCE694] break-words min-w-0">
                   {lightboxPoster.title}
                 </p>
                 <button
@@ -404,14 +404,14 @@ export const NewsStoriesView: React.FC<NewsStoriesViewProps> = ({
                     </p>
                   )}
 
-                  <p className="text-xs text-[#F7F2E8]/80 leading-relaxed line-clamp-3">
+                  <p className="text-xs text-[#F7F2E8]/80 leading-relaxed break-words">
                     {article.excerpt}
                   </p>
                 </div>
               </div>
 
               <div className="px-6 py-4 bg-[#0D0A06]/90 border-t border-[#C9A45C]/25 flex items-center justify-between text-xs">
-                <span className="text-[#E5C158]/75 truncate max-w-[62%]">
+                <span className="text-[#E5C158]/75 break-words min-w-0 max-w-[62%]">
                   {article.sourceReference}
                 </span>
                 <button
@@ -441,7 +441,7 @@ export const NewsStoriesView: React.FC<NewsStoriesViewProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-4 border-b border-[#C9A45C]/30 pb-2.5">
-              <p className="font-serif-heritage text-sm sm:text-base font-bold text-[#FCE694] truncate">
+              <p className="font-serif-heritage text-sm sm:text-base font-bold text-[#FCE694] break-words min-w-0">
                 {lightboxPoster.title}
               </p>
               <button
