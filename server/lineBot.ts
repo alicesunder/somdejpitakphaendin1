@@ -373,6 +373,7 @@ type LineMessage = Record<string, unknown>;
 type LineEvent = {
   type?: string;
   replyToken?: string;
+  source?: { userId?: string; type?: string };
   message?: { type?: string; text?: string };
   postback?: { data?: string };
 };
@@ -572,9 +573,60 @@ function getOrderStatus(order: OrderRecord): string {
   return lines.join('\n');
 }
 
-function processText(rawText: string, store: BotStore): LineMessage[] {
+async function processText(rawText: string, store: BotStore, userId?: string): Promise<LineMessage[]> {
   const text = rawText.trim();
   const siteUrl = getSiteUrl();
+
+  if (/^(ยกเลิก|cancel)$/i.test(text)) {
+    if (userId) await deleteReservationSession(userId);
+    return [textMessage('ยกเลิกขั้นตอนจองแล้วครับ หากต้องการเริ่มใหม่ พิมพ์ “รายการพระ” หรือ “จอง ชศ1 1” ได้เลย')];
+  }
+
+  if (userId) {
+    const activeSession = await loadReservationSession(userId);
+    if (activeSession) return handleReservationSession(text, activeSession, store, userId);
+  }
+
+  const bookingMatch = text.match(/^(?:จอง|สั่งจอง|สั่งซื้อ)\\s+((?:ชศ|ช)\\s*\\d{1,2})(?:\\s+(\\d{1,3}))?$/i);
+  if (bookingMatch) {
+    if (!userId) {
+      return [textMessage('การจองผ่านแชตใช้ได้ในห้องแชตส่วนตัวกับ LINE OA ครับ หรือเปิดเว็บไซต์เพื่อจองได้ที่ ' + siteUrl)];
+    }
+    const code = normalize(bookingMatch[1]);
+    const quantity = bookingMatch[2] ? Number(bookingMatch[2]) : 1;
+    const product = store.products.find((item) => item.isVisible && normalize(item.code) === code);
+    if (!product) {
+      return [textMessage('ไม่พบรหัสวัตถุมงคลนี้ในรายการที่เปิดเผย กรุณาพิมพ์ “รายการพระ” เพื่อตรวจสอบรหัสอีกครั้งครับ')];
+    }
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+      return [textMessage('จำนวนจองต้องเป็นจำนวนเต็มตั้งแต่ 1 ถึง 100 ครับ')];
+    }
+    if (product.requiresNumberSelection || /^ช1$/i.test(product.code)) {
+      return [textMessageWithOptions(
+        'รายการ ช1 ชุดทองคำใหญ่ราชาฤกษ์ต้องเลือกหมายเลขประจำชุด 1–99 และตรวจสอบการล็อกเลขในเว็บไซต์ จึงต้องจองผ่านหน้าเว็บไซต์โดยตรงครับ',
+        [['ไปยังเว็บไซต์เพื่อเลือกเลข', siteUrl]],
+      )];
+    }
+    if (!product.isMadeToOrder && quantity > product.stock) {
+      return [textMessage(`ขออภัย ${product.name} มีจำนวนคงเหลือตามข้อมูลล่าสุด ${product.stock} รายการ กรุณาลดจำนวนหรือสอบถามเจ้าหน้าที่ครับ`)];
+    }
+    const now = Date.now();
+    const session: ReservationSession = {
+      stage: 'name',
+      productId: product.id,
+      productCode: product.code,
+      productName: product.name,
+      quantity,
+      idempotencyKey: `line-${userId}-${randomUUID()}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await saveReservationSession(userId, session);
+    return [textMessageWithOptions(
+      `เริ่มขั้นตอนจอง ${product.name} (รหัส ${product.code}) จำนวน ${quantity} รายการ ราคา ${formatBaht(product.price * quantity)} บาทก่อนค่าจัดส่ง\\n\\nกรุณาพิมพ์ชื่อ–นามสกุลผู้จองครับ`,
+      [['ยกเลิกการจอง', 'ยกเลิก']],
+    )];
+  }
 
   if (!text) {
     return [textMessage('พิมพ์ “รายการพระ” เพื่อดูวัตถุมงคล หรือ “วิธีจอง” เพื่อดูขั้นตอนการจองครับ')];
@@ -781,9 +833,9 @@ export function createLineBotRouter(store: BotStore) {
             ),
           ];
         } else if (event.type === 'message' && event.message?.type === 'text') {
-          messages = processText(event.message.text || '', store);
+          messages = await processText(event.message.text || '', store, event.source?.type === 'user' ? event.source.userId : undefined);
         } else if (event.type === 'postback') {
-          messages = processText(event.postback?.data || '', store);
+          messages = await processText(event.postback?.data || '', store, event.source?.type === 'user' ? event.source.userId : undefined);
         } else {
           messages = [textMessage('บอตรองรับข้อความตัวอักษรครับ พิมพ์ “รายการพระ” เพื่อเริ่มต้น')];
         }
