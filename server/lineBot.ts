@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { Buffer } from 'node:buffer';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { AmuletProduct, OrderRecord } from '../src/types';
 import { verifyPhoneLast4 } from '../src/utils/commerceRules';
@@ -214,7 +215,6 @@ function getOrderStatus(order: OrderRecord): string {
 
 function processText(rawText: string, store: BotStore): LineMessage[] {
   const text = rawText.trim();
-  const compact = normalize(text);
   const siteUrl = getSiteUrl();
 
   if (!text) {
