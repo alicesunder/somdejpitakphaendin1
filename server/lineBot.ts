@@ -172,13 +172,13 @@ function reservationQuote(
       `ค่าจัดส่ง: ${formatBaht(totals.shippingTotal)} บาท`,
       `ยอดรวม: ${formatBaht(totals.grandTotal)} บาท`,
       `ผู้จอง: ${session.customerName}`,
-      `โทรศัพท์: XXX-XXX-${(session.customerPhone || '').replace(/\\D/g, '').slice(-4)}`,
+      `โทรศัพท์: XXX-XXX-${(session.customerPhone || '').replace(/\D/g, '').slice(-4)}`,
       `หน่วยงาน: ${session.organization || 'ประชาชนทั่วไป'}`,
       `วิธีรับ: ${session.deliveryMethod === 'pickup_bpp' ? 'รับเองที่ บช.ตชด.' : 'จัดส่งทางไปรษณีย์'}`,
       `วิธีชำระ: ${session.paymentMethod === 'promptpay' ? 'พร้อมเพย์' : 'โอนเงิน'}`,
       '',
       'ยอดรวมสุดท้ายจะถูกตรวจสอบอีกครั้งโดยเว็บไซต์ก่อนบันทึกใบจอง.',
-    ].join('\\n'),
+    ].join('\n'),
   };
 }
 
@@ -189,7 +189,7 @@ async function handleReservationSession(
   userId: string,
 ): Promise<LineMessage[]> {
   const text = rawText.trim();
-  const digits = text.replace(/\\D/g, '');
+  const digits = text.replace(/\D/g, '');
 
   if (/^(ยกเลิก|cancel)$/i.test(text)) {
     await deleteReservationSession(userId);
@@ -258,7 +258,7 @@ async function handleReservationSession(
   }
 
   if (session.stage === 'postal') {
-    if (!/^\\d{5}$/.test(text)) {
+    if (!/^\d{5}$/.test(text)) {
       return [textMessageWithOptions('รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลักครับ', [['ยกเลิกการจอง', 'ยกเลิก']])];
     }
     session.postalCode = text;
@@ -340,7 +340,7 @@ async function handleReservationSession(
       }
       await deleteReservationSession(userId);
       const reason = typeof body.error === 'string' ? body.error : 'ระบบไม่สามารถสร้างใบจองได้';
-      return [textMessage(`ยังไม่สามารถสร้างใบจองได้: ${reason}\\n\\nกรุณาพิมพ์ “รายการพระ” เพื่อเริ่มใหม่ หรือเปิดเว็บไซต์ ${siteUrl}`)];
+      return [textMessage(`ยังไม่สามารถสร้างใบจองได้: ${reason}\n\nกรุณาพิมพ์ “รายการพระ” เพื่อเริ่มใหม่ หรือเปิดเว็บไซต์ ${siteUrl}`)];
     }
 
     await deleteReservationSession(userId);
@@ -358,7 +358,7 @@ async function handleReservationSession(
           '',
           `ติดตามสถานะโดยพิมพ์ “ติดตาม ${order.orderNumber} โทรศัพท์ 4 หลักท้าย”`,
           `รายละเอียดช่องทางชำระเงินและเงื่อนไขรับวัตถุมงคล โปรดตรวจสอบบนเว็บไซต์: ${siteUrl}`,
-        ].join('\\n'),
+        ].join('\n'),
       ),
     ];
   }
@@ -587,7 +587,7 @@ async function processText(rawText: string, store: BotStore, userId?: string): P
     if (activeSession) return handleReservationSession(text, activeSession, store, userId);
   }
 
-  const bookingMatch = text.match(/^(?:จอง|สั่งจอง|สั่งซื้อ)\\s+((?:ชศ|ช)\\s*\\d{1,2})(?:\\s+(\\d{1,3}))?$/i);
+  const bookingMatch = text.match(/^(?:จอง|สั่งจอง|สั่งซื้อ)\s+((?:ชศ|ช)\s*\d{1,2})(?:\s+(\d{1,3}))?$/i);
   if (bookingMatch) {
     if (!userId) {
       return [textMessage('การจองผ่านแชตใช้ได้ในห้องแชตส่วนตัวกับ LINE OA ครับ หรือเปิดเว็บไซต์เพื่อจองได้ที่ ' + siteUrl)];
@@ -623,7 +623,7 @@ async function processText(rawText: string, store: BotStore, userId?: string): P
     };
     await saveReservationSession(userId, session);
     return [textMessageWithOptions(
-      `เริ่มขั้นตอนจอง ${product.name} (รหัส ${product.code}) จำนวน ${quantity} รายการ ราคา ${formatBaht(product.price * quantity)} บาทก่อนค่าจัดส่ง\\n\\nกรุณาพิมพ์ชื่อ–นามสกุลผู้จองครับ`,
+      `เริ่มขั้นตอนจอง ${product.name} (รหัส ${product.code}) จำนวน ${quantity} รายการ ราคา ${formatBaht(product.price * quantity)} บาทก่อนค่าจัดส่ง\n\nกรุณาพิมพ์ชื่อ–นามสกุลผู้จองครับ`,
       [['ยกเลิกการจอง', 'ยกเลิก']],
     )];
   }
@@ -643,7 +643,7 @@ async function processText(rawText: string, store: BotStore, userId?: string): P
   if (/^(วิธีจอง|จองอย่างไร|ขั้นตอนจอง|วิธีสั่งจอง)$/i.test(text)) {
     return [
       textMessage(
-        'ขั้นตอนการจอง\n๑. เลือกรายการวัตถุมงคลและตรวจสอบราคา\n๒. กด “ดูและจองบนเว็บไซต์”\n๓. เลือกรายการและจำนวนที่ต้องการ กรอกข้อมูลผู้จองให้ครบ\n๔. ตรวจสอบยอดรวมและส่งใบจอง\n๕. ติดตามสถานะได้โดยพิมพ์ “ติดตาม เลขที่ใบจอง โทรศัพท์4หลักท้าย”\n\nระบบใช้เว็บไซต์เดิมในการบันทึกคำสั่งจองเป็นข้อมูลกลาง',
+        'ขั้นตอนการจอง\\n• จองรายการทั่วไปผ่านแชต: พิมพ์ “จอง ชศ1 1” โดยเปลี่ยนเป็นรหัสและจำนวนที่ต้องการ แล้วทำตามขั้นตอน\\n• ช1 ชุดทองคำใหญ่ราชาฤกษ์ต้องจองบนเว็บไซต์เพื่อเลือกหมายเลข 1–99\\n• ติดตามสถานะ: พิมพ์ “ติดตาม BPP-2569-1234 5678” โดยเปลี่ยนเป็นเลขใบจองจริงและโทรศัพท์ 4 หลักท้าย\\n\\nระบบตรวจราคา สต็อก และบันทึกใบจองผ่าน API ของเว็บไซต์เดิม',
       ),
     ];
   }
