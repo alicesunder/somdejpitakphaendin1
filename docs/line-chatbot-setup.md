@@ -28,7 +28,7 @@ Never put these credentials in frontend code, commit them to GitHub, or share th
 2. Copy the channel secret and issue a channel access token.
 3. Set the environment variables above in the Vercel project.
 4. Deploy the feature branch to a preview first; do not switch the production webhook until the preview has passed validation.
-5. For production, set the webhook URL to `https://www.somdejpitakphaendin.com/api/line/webhook` (or the actual production domain configured in Vercel), and enable **Use webhook**.
+5. After the feature branch has been merged to `main` and the production deployment is ready, set the webhook URL to `https://www.somdejpitakphaendin.com/api/line/webhook` (or the actual production domain configured in Vercel), and enable **Use webhook**. Do not point the production LINE channel to this branch until the production code includes the route.
 6. In LINE Official Account Manager, turn off conflicting automatic responses/greeting messages if the bot is intended to own those replies.
 7. Press **Verify** in LINE Developers Console and test: `รายการพระ`, `ชศ1`, `ชุดพิเศษ`, `วิธีจอง`, and order tracking with an actual order number and phone suffix.
 
