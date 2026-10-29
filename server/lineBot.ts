@@ -1,13 +1,372 @@
 import { Router, Request, Response } from 'express';
 import { Buffer } from 'node:buffer';
-import { createHmac, timingSafeEqual } from 'node:crypto';
-import { AmuletProduct, OrderRecord } from '../src/types';
-import { verifyPhoneLast4 } from '../src/utils/commerceRules';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import type { Firestore } from 'firebase-admin/firestore';
+import { AmuletProduct, OrderRecord, SiteConfig } from '../src/types';
+import { calculateOrderTotals, verifyPhoneLast4 } from '../src/utils/commerceRules';
 
 type BotStore = {
   products: AmuletProduct[];
   orders: OrderRecord[];
+  siteConfig: SiteConfig;
 };
+
+type ReservationStage =
+  | 'name'
+  | 'phone'
+  | 'organization'
+  | 'delivery'
+  | 'address'
+  | 'postal'
+  | 'payment'
+  | 'confirm';
+
+type ReservationSession = {
+  stage: ReservationStage;
+  productId: string;
+  productCode: string;
+  productName: string;
+  quantity: number;
+  idempotencyKey: string;
+  customerName?: string;
+  customerPhone?: string;
+  organization?: string;
+  deliveryMethod?: 'shipping' | 'pickup_bpp';
+  shippingAddress?: string;
+  postalCode?: string;
+  paymentMethod?: 'promptpay' | 'bank_transfer';
+  createdAt: number;
+  updatedAt: number;
+};
+
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const localSessions = new Map<string, ReservationSession>();
+let sessionsDb: Firestore | null | undefined;
+
+function getSessionsDb(): Firestore | null {
+  if (sessionsDb !== undefined) return sessionsDb;
+
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!raw) {
+    sessionsDb = null;
+    return null;
+  }
+
+  try {
+    const serviceAccountText = raw.trim().startsWith('{')
+      ? raw
+      : Buffer.from(raw, 'base64').toString('utf-8');
+    const credentials = JSON.parse(serviceAccountText);
+    if (typeof credentials.private_key === 'string') {
+      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+    }
+    const app =
+      getApps()[0] ??
+      initializeApp({ credential: cert(credentials) });
+    sessionsDb = getFirestore(app, process.env.FIREBASE_DATABASE_ID || '(default)');
+    return sessionsDb;
+  } catch (error) {
+    console.error('Could not initialize Firestore session storage:', error);
+    throw new Error('LINE reservation sessions could not access Firestore.');
+  }
+}
+
+async function loadReservationSession(userId: string): Promise<ReservationSession | null> {
+  const db = getSessionsDb();
+  let session: ReservationSession | undefined;
+
+  if (db) {
+    const snapshot = await db.collection('lineBotSessions').doc(userId).get();
+    session = snapshot.exists ? (snapshot.data()?.session as ReservationSession) : undefined;
+  } else {
+    if (process.env.VERCEL) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT is required for LINE reservation sessions on Vercel.');
+    }
+    session = localSessions.get(userId);
+  }
+
+  if (!session) return null;
+  if (!session.updatedAt || Date.now() - session.updatedAt > SESSION_TTL_MS) {
+    await deleteReservationSession(userId);
+    return null;
+  }
+  return session;
+}
+
+async function saveReservationSession(userId: string, session: ReservationSession): Promise<void> {
+  session.updatedAt = Date.now();
+  const db = getSessionsDb();
+  if (db) {
+    await db.collection('lineBotSessions').doc(userId).set({
+      session,
+      updatedAt: new Date(session.updatedAt).toISOString(),
+    });
+    return;
+  }
+  if (process.env.VERCEL) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT is required for LINE reservation sessions on Vercel.');
+  }
+  localSessions.set(userId, session);
+}
+
+async function deleteReservationSession(userId: string): Promise<void> {
+  const db = getSessionsDb();
+  if (db) {
+    await db.collection('lineBotSessions').doc(userId).delete();
+    return;
+  }
+  localSessions.delete(userId);
+}
+
+function textMessageWithOptions(
+  text: string,
+  options: Array<[string, string]>,
+): LineMessage {
+  return {
+    type: 'text',
+    text,
+    quickReply: {
+      items: options.slice(0, 13).map(([label, value]) => ({
+        type: 'action',
+        action: { type: 'message', label: label.slice(0, 20), text: value.slice(0, 300) },
+      })),
+    },
+  };
+}
+
+function availablePaymentOptions(config: SiteConfig): Array<[string, string]> {
+  const options: Array<[string, string]> = [];
+  if (config.paymentChannels?.enablePromptPay) options.push(['พร้อมเพย์', 'พร้อมเพย์']);
+  if (config.paymentChannels?.enableBankTransfer) options.push(['โอนเงิน', 'โอนเงิน']);
+  return options;
+}
+
+function reservationQuote(
+  session: ReservationSession,
+  store: BotStore,
+): { valid: boolean; text: string } {
+  const product = store.products.find((item) => item.id === session.productId && item.isVisible);
+  if (!product) {
+    return { valid: false, text: 'ขออภัย รายการนี้ไม่พร้อมให้จองแล้ว กรุณาพิมพ์ “รายการพระ” เพื่อเลือกใหม่ครับ' };
+  }
+
+  const totals = calculateOrderTotals(
+    [{ productId: session.productId, quantity: session.quantity }],
+    store.products,
+    session.deliveryMethod === 'pickup_bpp' ? 0 : store.siteConfig.standardShippingFee,
+    store.siteConfig.freeShippingThreshold,
+  );
+  if (!totals.valid) {
+    return { valid: false, text: totals.errors[0] || 'รายการนี้ไม่สามารถจองได้ในขณะนี้ กรุณาเลือกใหม่ครับ' };
+  }
+
+  return {
+    valid: true,
+    text: [
+      'กรุณาตรวจสอบข้อมูลก่อนยืนยันใบจอง',
+      `รายการ: ${product.name} (${product.code})`,
+      `จำนวน: ${session.quantity}`,
+      `ราคาต่อรายการ: ${formatBaht(product.price)} บาท`,
+      `ค่าจัดส่ง: ${formatBaht(totals.shippingTotal)} บาท`,
+      `ยอดรวม: ${formatBaht(totals.grandTotal)} บาท`,
+      `ผู้จอง: ${session.customerName}`,
+      `โทรศัพท์: XXX-XXX-${(session.customerPhone || '').replace(/\\D/g, '').slice(-4)}`,
+      `หน่วยงาน: ${session.organization || 'ประชาชนทั่วไป'}`,
+      `วิธีรับ: ${session.deliveryMethod === 'pickup_bpp' ? 'รับเองที่ บช.ตชด.' : 'จัดส่งทางไปรษณีย์'}`,
+      `วิธีชำระ: ${session.paymentMethod === 'promptpay' ? 'พร้อมเพย์' : 'โอนเงิน'}`,
+      '',
+      'ยอดรวมสุดท้ายจะถูกตรวจสอบอีกครั้งโดยเว็บไซต์ก่อนบันทึกใบจอง.',
+    ].join('\\n'),
+  };
+}
+
+async function handleReservationSession(
+  rawText: string,
+  session: ReservationSession,
+  store: BotStore,
+  userId: string,
+): Promise<LineMessage[]> {
+  const text = rawText.trim();
+  const digits = text.replace(/\\D/g, '');
+
+  if (/^(ยกเลิก|cancel)$/i.test(text)) {
+    await deleteReservationSession(userId);
+    return [textMessage('ยกเลิกขั้นตอนจองแล้วครับ หากต้องการเริ่มใหม่ พิมพ์ “รายการพระ” หรือ “จอง ชศ1 1” ได้เลย')];
+  }
+
+  if (session.stage === 'name') {
+    if (text.length < 3) {
+      return [textMessageWithOptions('กรุณาพิมพ์ชื่อ–นามสกุลผู้จองอย่างน้อย 3 ตัวอักษรครับ', [['ยกเลิกการจอง', 'ยกเลิก']])];
+    }
+    session.customerName = text;
+    session.stage = 'phone';
+    await saveReservationSession(userId, session);
+    return [textMessageWithOptions('ขอหมายเลขโทรศัพท์ที่ติดต่อได้ 9–10 หลักครับ', [['ยกเลิกการจอง', 'ยกเลิก']])];
+  }
+
+  if (session.stage === 'phone') {
+    if (digits.length < 9 || digits.length > 10) {
+      return [textMessageWithOptions('กรุณากรอกเบอร์โทรศัพท์ 9–10 หลัก ตัวอย่าง 0812345678', [['ยกเลิกการจอง', 'ยกเลิก']])];
+    }
+    session.customerPhone = text;
+    session.stage = 'organization';
+    await saveReservationSession(userId, session);
+    return [textMessageWithOptions('ระบุหน่วยงาน/สังกัด หรือเลือก “ประชาชนทั่วไป” ครับ', [['ประชาชนทั่วไป', 'ประชาชนทั่วไป'], ['ยกเลิกการจอง', 'ยกเลิก']])];
+  }
+
+  if (session.stage === 'organization') {
+    if (text.length < 2) {
+      return [textMessageWithOptions('กรุณาระบุหน่วยงาน หรือเลือก “ประชาชนทั่วไป” ครับ', [['ประชาชนทั่วไป', 'ประชาชนทั่วไป'], ['ยกเลิกการจอง', 'ยกเลิก']])];
+    }
+    session.organization = text;
+    session.stage = 'delivery';
+    await saveReservationSession(userId, session);
+    return [textMessageWithOptions('ต้องการรับวัตถุมงคลแบบใดครับ?', [['จัดส่งไปรษณีย์', 'จัดส่ง'], ['รับเองที่ บช.ตชด.', 'รับเอง'], ['ยกเลิกการจอง', 'ยกเลิก']])];
+  }
+
+  if (session.stage === 'delivery') {
+    if (/^(จัดส่ง|ส่ง|จัดส่งไปรษณีย์|จัดส่งทางไปรษณีย์)$/i.test(text)) {
+      session.deliveryMethod = 'shipping';
+      session.stage = 'address';
+      await saveReservationSession(userId, session);
+      return [textMessageWithOptions('กรุณาพิมพ์ที่อยู่จัดส่งให้ครบ (บ้านเลขที่ ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด) ครับ', [['ยกเลิกการจอง', 'ยกเลิก']])];
+    }
+    if (/^(รับเอง|รับที่บช\.ตชด\.|รับเองที่บช\.ตชด\.)$/i.test(text)) {
+      session.deliveryMethod = 'pickup_bpp';
+      session.postalCode = '10400';
+      session.stage = 'payment';
+      await saveReservationSession(userId, session);
+      const options = availablePaymentOptions(store.siteConfig);
+      if (!options.length) {
+        return [textMessage('ขณะนี้ยังไม่มีช่องทางชำระเงินที่เปิดใช้งานในระบบ กรุณาติดต่อเจ้าหน้าที่ก่อนยืนยันการจองครับ')];
+      }
+      return [textMessageWithOptions('โปรดเลือกช่องทางชำระเงินครับ', options.concat([['ยกเลิกการจอง', 'ยกเลิก']]))];
+    }
+    return [textMessageWithOptions('กรุณาเลือก “จัดส่งไปรษณีย์” หรือ “รับเองที่ บช.ตชด.” ครับ', [['จัดส่งไปรษณีย์', 'จัดส่ง'], ['รับเองที่ บช.ตชด.', 'รับเอง'], ['ยกเลิกการจอง', 'ยกเลิก']])];
+  }
+
+  if (session.stage === 'address') {
+    if (text.length < 8) {
+      return [textMessageWithOptions('ที่อยู่ยังไม่ครบ กรุณาระบุบ้านเลขที่ ถนน ตำบล/แขวง อำเภอ/เขต และจังหวัดครับ', [['ยกเลิกการจอง', 'ยกเลิก']])];
+    }
+    session.shippingAddress = text;
+    session.stage = 'postal';
+    await saveReservationSession(userId, session);
+    return [textMessageWithOptions('กรุณาระบุรหัสไปรษณีย์ 5 หลักครับ', [['ยกเลิกการจอง', 'ยกเลิก']])];
+  }
+
+  if (session.stage === 'postal') {
+    if (!/^\\d{5}$/.test(text)) {
+      return [textMessageWithOptions('รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลักครับ', [['ยกเลิกการจอง', 'ยกเลิก']])];
+    }
+    session.postalCode = text;
+    session.stage = 'payment';
+    await saveReservationSession(userId, session);
+    const options = availablePaymentOptions(store.siteConfig);
+    if (!options.length) {
+      return [textMessage('ขณะนี้ยังไม่มีช่องทางชำระเงินที่เปิดใช้งานในระบบ กรุณาติดต่อเจ้าหน้าที่ก่อนยืนยันการจองครับ')];
+    }
+    return [textMessageWithOptions('โปรดเลือกช่องทางชำระเงินครับ', options.concat([['ยกเลิกการจอง', 'ยกเลิก']]))];
+  }
+
+  if (session.stage === 'payment') {
+    const method = /^(พร้อมเพย์|promptpay|qr)$/i.test(text)
+      ? 'promptpay'
+      : /^(โอนเงิน|โอนธนาคาร|bank_transfer)$/i.test(text)
+      ? 'bank_transfer'
+      : undefined;
+    const optionLabels = availablePaymentOptions(store.siteConfig);
+    if (!method || !optionLabels.some(([, value]) =>
+      (method === 'promptpay' && /พร้อมเพย์/i.test(value)) ||
+      (method === 'bank_transfer' && /โอนเงิน/i.test(value))
+    )) {
+      return [textMessageWithOptions('กรุณาเลือกช่องทางชำระเงินจากตัวเลือกที่แสดงครับ', optionLabels.concat([['ยกเลิกการจอง', 'ยกเลิก']]))];
+    }
+    session.paymentMethod = method;
+    session.stage = 'confirm';
+    await saveReservationSession(userId, session);
+    const quote = reservationQuote(session, store);
+    if (!quote.valid) {
+      await deleteReservationSession(userId);
+      return [textMessage(quote.text)];
+    }
+    return [textMessageWithOptions(quote.text, [['ยืนยันการจอง', 'ยืนยัน'], ['ยกเลิกการจอง', 'ยกเลิก']])];
+  }
+
+  if (session.stage === 'confirm') {
+    if (!/^(ยืนยัน|ยืนยันการจอง|confirm)$/i.test(text)) {
+      return [textMessageWithOptions('กรุณากด “ยืนยันการจอง” หรือ “ยกเลิกการจอง” ครับ', [['ยืนยันการจอง', 'ยืนยัน'], ['ยกเลิกการจอง', 'ยกเลิก']])];
+    }
+
+    const quote = reservationQuote(session, store);
+    if (!quote.valid) {
+      await deleteReservationSession(userId);
+      return [textMessage(quote.text)];
+    }
+
+    const siteUrl = getSiteUrl();
+    let response: globalThis.Response;
+    let body: Record<string, any> = {};
+    try {
+      response = await fetch(`${siteUrl}/api/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: [{ productId: session.productId, quantity: session.quantity }],
+          customerName: session.customerName,
+          organization: session.organization || 'ประชาชนทั่วไป',
+          customerPhone: session.customerPhone,
+          deliveryMethod: session.deliveryMethod,
+          shippingAddress: session.deliveryMethod === 'pickup_bpp'
+            ? 'มารับเองที่ บช.ตชด.'
+            : session.shippingAddress,
+          postalCode: session.postalCode || '',
+          paymentMethod: session.paymentMethod,
+          sessionId: `LINE-${userId}`,
+          idempotencyKey: session.idempotencyKey,
+        }),
+      });
+      body = (await response.json().catch(() => ({}))) as Record<string, any>;
+    } catch (error) {
+      console.error('Failed to create reservation through storefront API:', error);
+      return [textMessageWithOptions('เชื่อมต่อระบบใบจองไม่สำเร็จชั่วคราว ข้อมูลที่กรอกยังถูกเก็บไว้ กรุณากด “ยืนยัน” อีกครั้งภายหลัง หรือเข้าเว็บไซต์โดยตรงครับ', [['ยืนยันอีกครั้ง', 'ยืนยัน'], ['ยกเลิกการจอง', 'ยกเลิก']])];
+    }
+
+    if (!response.ok) {
+      if (response.status >= 500) {
+        return [textMessageWithOptions('ระบบใบจองขัดข้องชั่วคราว ข้อมูลที่กรอกยังถูกเก็บไว้ กรุณากด “ยืนยัน” อีกครั้งภายหลังครับ', [['ยืนยันอีกครั้ง', 'ยืนยัน'], ['ยกเลิกการจอง', 'ยกเลิก']])];
+      }
+      await deleteReservationSession(userId);
+      const reason = typeof body.error === 'string' ? body.error : 'ระบบไม่สามารถสร้างใบจองได้';
+      return [textMessage(`ยังไม่สามารถสร้างใบจองได้: ${reason}\\n\\nกรุณาพิมพ์ “รายการพระ” เพื่อเริ่มใหม่ หรือเปิดเว็บไซต์ ${siteUrl}`)];
+    }
+
+    await deleteReservationSession(userId);
+    const order = body.order as { orderNumber?: string; grandTotal?: number } | undefined;
+    if (!order?.orderNumber) {
+      return [textMessage(`ระบบรับคำขอแล้ว แต่ไม่พบเลขที่ใบจองในคำตอบ กรุณาตรวจสอบผ่านเว็บไซต์ ${siteUrl}`)];
+    }
+    return [
+      textMessage(
+        [
+          '✅ บันทึกใบจองเรียบร้อยแล้ว',
+          `เลขที่ใบจอง: ${order.orderNumber}`,
+          `ยอดรวม: ${formatBaht(Number(order.grandTotal ?? 0))} บาท`,
+          'สถานะการชำระเงิน: รอเจ้าหน้าที่ตรวจสอบ',
+          '',
+          `ติดตามสถานะโดยพิมพ์ “ติดตาม ${order.orderNumber} โทรศัพท์ 4 หลักท้าย”`,
+          `รายละเอียดช่องทางชำระเงินและเงื่อนไขรับวัตถุมงคล โปรดตรวจสอบบนเว็บไซต์: ${siteUrl}`,
+        ].join('\\n'),
+      ),
+    ];
+  }
+
+  await deleteReservationSession(userId);
+  return [textMessage('ขั้นตอนจองไม่ถูกต้อง ระบบยกเลิกขั้นตอนเดิมแล้ว กรุณาพิมพ์ “รายการพระ” เพื่อเริ่มใหม่ครับ')];
+}
+
 
 type RequestWithRawBody = Request & { rawBody?: Buffer };
 type LineMessage = Record<string, unknown>;
