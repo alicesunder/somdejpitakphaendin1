@@ -8,7 +8,8 @@ This feature adds a LINE Messaging API webhook to the existing storefront. The w
 - Replies to greeting/help, product-code and material/price searches, special-set searches, and reservation instructions.
 - Displays product cards using the live product data loaded by the existing store backend.
 - Starts a guided reservation flow for regular product codes via `จอง ชศ1 1` (replace the code and quantity). It collects name, telephone, unit/organization, delivery method, shipping address/postal code if applicable, and an enabled payment method, then asks for explicit confirmation.
-- Stores the user's in-progress reservation step in a `lineBotSessions` Firestore collection, with a two-hour idle expiry. No customer reservation is created until the user presses `ยืนยัน`.
+- Stores the user's in-progress reservation step in a `lineBotSessions` Firestore collection. An idle session is treated as expired after two hours and removed when that user next messages. No customer reservation is created until the user presses `ยืนยัน`.
+- After a successful reservation, confirms the order number and total, and displays the payment instructions from the site's current `siteConfig` (PromptPay ID or bank-transfer details).
 - Sends customers to the existing website to complete checkout, so the current checkout validation, stock handling and Firestore persistence remain authoritative.
 - Allows order tracking in chat using `ติดตาม BPP-2569-1234 5678` (replace with the customer's actual order number and last four phone digits).
 - Optionally sends a new-order notification to staff LINE user IDs.
