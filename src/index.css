@@ -457,3 +457,222 @@ html.intro-playing .hero-rise {
     filter: none !important;
   }
 }
+
+
+/* ---------- Light & motion (site-wide) ---------- */
+
+/* Ambient gold light drifting behind/over the storefront (see AmbientLight.tsx) */
+.ambient-light {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ambient-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  will-change: transform, opacity;
+}
+.ambient-orb-a {
+  width: 46vmax;
+  height: 46vmax;
+  left: -16vmax;
+  top: -14vmax;
+  background: radial-gradient(circle, rgba(232, 184, 76, 0.16) 0%, rgba(232, 184, 76, 0) 65%);
+  animation: orbDriftA 28s ease-in-out infinite alternate;
+}
+.ambient-orb-b {
+  width: 40vmax;
+  height: 40vmax;
+  right: -16vmax;
+  top: 32vh;
+  background: radial-gradient(circle, rgba(252, 220, 140, 0.12) 0%, rgba(252, 220, 140, 0) 65%);
+  animation: orbDriftB 34s ease-in-out infinite alternate;
+}
+.ambient-orb-c {
+  width: 38vmax;
+  height: 38vmax;
+  left: 28vw;
+  bottom: -22vmax;
+  background: radial-gradient(circle, rgba(201, 140, 50, 0.13) 0%, rgba(201, 140, 50, 0) 65%);
+  animation: orbDriftC 40s ease-in-out infinite alternate;
+}
+@keyframes orbDriftA {
+  0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.8; }
+  100% { transform: translate3d(14vw, 18vh, 0) scale(1.15); opacity: 1; }
+}
+@keyframes orbDriftB {
+  0% { transform: translate3d(0, 0, 0) scale(1.1); opacity: 1; }
+  100% { transform: translate3d(-18vw, -14vh, 0) scale(0.95); opacity: 0.75; }
+}
+@keyframes orbDriftC {
+  0% { transform: translate3d(0, 0, 0) scale(0.95); opacity: 0.7; }
+  100% { transform: translate3d(-12vw, -20vh, 0) scale(1.1); opacity: 1; }
+}
+
+/* Scroll reveal (classes added by useSacredMotion, so nothing hides without JavaScript) */
+.reveal {
+  opacity: 0;
+  translate: 0 22px;
+  transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1), translate 800ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sacred-vault-card.reveal {
+  transition:
+    opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    translate 800ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.reveal-in {
+  opacity: 1;
+  translate: 0 0;
+}
+
+/* A soft gold light that follows the pointer across cards (--mx / --my set by useSacredMotion) */
+.sacred-vault-card {
+  background:
+    radial-gradient(320px circle at var(--mx, -600px) var(--my, -600px), rgba(252, 230, 148, 0.13), rgba(252, 230, 148, 0) 65%),
+    radial-gradient(100% 80% at 50% 0%, rgba(212, 175, 55, 0.15) 0%, rgba(44, 34, 18, 0.42) 45%, rgba(12, 10, 7, 0.98) 100%),
+    linear-gradient(180deg, #1C160D 0%, #0E0B08 100%);
+}
+.archival-paper-card {
+  background:
+    radial-gradient(380px circle at var(--mx, -600px) var(--my, -600px), rgba(252, 230, 148, 0.1), rgba(252, 230, 148, 0) 65%),
+    radial-gradient(110% 85% at 50% 0%, rgba(252, 230, 148, 0.14) 0%, rgba(46, 35, 18, 0.42) 48%, rgba(12, 10, 7, 0.98) 100%),
+    linear-gradient(180deg, #1D170E 0%, #0E0B08 100%);
+}
+.sacred-shrine-pedestal {
+  background:
+    radial-gradient(420px circle at var(--mx, -600px) var(--my, -600px), rgba(252, 230, 148, 0.09), rgba(252, 230, 148, 0) 65%),
+    radial-gradient(120% 90% at 50% 0%, rgba(252, 230, 148, 0.18) 0%, rgba(168, 130, 56, 0.14) 38%, rgba(12, 10, 7, 0.98) 100%),
+    linear-gradient(180deg, #211A10 0%, #120E09 65%, #090705 100%);
+}
+
+/* Gold buttons: a sheen of light passes across every few seconds */
+.btn-sacred-gold::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 42%;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 100%);
+  transform: translateX(-180%) skewX(-18deg);
+  animation: btnSheen 5.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.btn-sacred-gold:disabled::after {
+  animation: none;
+  opacity: 0;
+}
+@keyframes btnSheen {
+  0%, 64% { transform: translateX(-180%) skewX(-18deg); }
+  84%, 100% { transform: translateX(340%) skewX(-18deg); }
+}
+
+/* Gold headings: a slow glint travels along the letters */
+.text-gold-shimmer {
+  background-image:
+    linear-gradient(105deg, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0.8) 50%, rgba(255, 255, 255, 0) 62%),
+    linear-gradient(180deg, #FFFDF2 0%, #F6DC86 48%, #C69635 100%);
+  background-size: 260% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 160% 0, 0 0;
+  animation: goldTextGlint 7s ease-in-out infinite;
+}
+@keyframes goldTextGlint {
+  0%, 55% { background-position: 160% 0, 0 0; }
+  85%, 100% { background-position: -60% 0, 0 0; }
+}
+
+/* Gold divider lines: a spark of light runs along them */
+.heritage-gold-divider {
+  background-image:
+    linear-gradient(90deg, rgba(255, 244, 200, 0) 0%, rgba(255, 244, 200, 0.95) 50%, rgba(255, 244, 200, 0) 100%),
+    linear-gradient(90deg, transparent 0%, rgba(201, 164, 92, 0.75) 50%, transparent 100%);
+  background-size: 22% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  animation: dividerGlint 5.5s ease-in-out infinite;
+}
+@keyframes dividerGlint {
+  0% { background-position: -30% 0, 0 0; }
+  70%, 100% { background-position: 130% 0, 0 0; }
+}
+
+/* ---------- Order celebration (OrderCelebration.tsx) ---------- */
+.celebrate-backdrop {
+  background: radial-gradient(60% 50% at 50% 42%, rgba(74, 54, 16, 0.94) 0%, rgba(8, 7, 5, 0.97) 70%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: celebrateFade 420ms ease-out both;
+  overflow: hidden;
+}
+.celebrate-rays {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 160vmax;
+  height: 160vmax;
+  margin: -80vmax 0 0 -80vmax;
+  background: repeating-conic-gradient(from 0deg, rgba(252, 220, 140, 0.16) 0deg 6deg, rgba(252, 220, 140, 0) 6deg 18deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0.6) 25%, transparent 55%);
+  mask-image: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0.6) 25%, transparent 55%);
+  animation: celebrateRays 18s linear infinite, celebrateFade 900ms ease-out both;
+  pointer-events: none;
+}
+.celebrate-card {
+  animation: celebratePop 700ms cubic-bezier(0.22, 1.4, 0.36, 1) 120ms both;
+}
+.celebrate-seal {
+  width: 104px;
+  height: 104px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 35% 30%, #FFF8D6 0%, #F2CF6B 40%, #B88928 100%);
+  box-shadow:
+    0 0 0 6px rgba(252, 230, 148, 0.18),
+    0 0 60px 10px rgba(252, 210, 110, 0.55),
+    inset 0 2px 0 rgba(255, 255, 255, 0.8);
+  animation: celebrateSeal 2.4s ease-in-out 800ms infinite;
+}
+@keyframes celebrateFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes celebrateRays {
+  to { transform: rotate(360deg); }
+}
+@keyframes celebratePop {
+  0% { opacity: 0; transform: scale(0.6) translateY(24px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes celebrateSeal {
+  0%, 100% { box-shadow: 0 0 0 6px rgba(252, 230, 148, 0.18), 0 0 60px 10px rgba(252, 210, 110, 0.55), inset 0 2px 0 rgba(255, 255, 255, 0.8); }
+  50% { box-shadow: 0 0 0 14px rgba(252, 230, 148, 0.08), 0 0 90px 22px rgba(252, 210, 110, 0.7), inset 0 2px 0 rgba(255, 255, 255, 0.8); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-orb,
+  .btn-sacred-gold::after,
+  .text-gold-shimmer,
+  .heritage-gold-divider,
+  .celebrate-rays,
+  .celebrate-seal,
+  .celebrate-card {
+    animation: none !important;
+  }
+  .btn-sacred-gold::after {
+    opacity: 0;
+  }
+}
+
+@media print {
+  .reveal {
+    opacity: 1 !important;
+    translate: none !important;
+  }
+}

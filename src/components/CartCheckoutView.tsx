@@ -33,6 +33,7 @@ import {
   validateCheckoutForm,
 } from '../utils/commerceRules';
 import { compressSlipImage } from '../utils/slipImage';
+import { OrderCelebration } from './OrderCelebration';
 import { SpecimenPlate } from './SacredArtwork';
 import { RajaNumberGridModal } from './RajaNumberGridModal';
 import LineContact from './LineContact';
@@ -109,6 +110,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [confirmedOrder, setConfirmedOrder] =
     useState<PublicTrackedOrder | null>(null);
+  const [celebrating, setCelebrating] = useState(false);
   const [idempotencyKey] = useState(
     () => `idem-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
   );
@@ -257,6 +259,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
           createdOrder.grandTotalThaiText ||
           numberToThaiBahtText(createdOrder.grandTotal),
       });
+      setCelebrating(true);
       onOrderCreated(createdOrder, data.rajaSlots, data.products);
       onClearCart(true);
     } catch {
@@ -270,6 +273,12 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
   if (confirmedOrder) {
     return (
       <div className="bg-[#080705] text-[#F7F2E8] min-h-screen py-10 px-4 sm:px-6">
+        {celebrating && (
+          <OrderCelebration
+            orderNumber={confirmedOrder.orderNumber}
+            onClose={() => setCelebrating(false)}
+          />
+        )}
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Top Action Bar (Hidden when printing) */}
           <div className="no-print sacred-shrine-pedestal rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 border border-[#FCE694]/60">

@@ -32,6 +32,8 @@ import {
 import { AppView, Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { IntroSplash } from './components/IntroSplash';
+import { AmbientLight } from './components/AmbientLight';
+import { useSacredMotion } from './utils/useSacredMotion';
 import { MobileTabBar } from './components/MobileTabBar';
 import { HomeView } from './components/HomeView';
 import { CatalogView } from './components/CatalogView';
@@ -510,12 +512,16 @@ export default function App() {
     );
   }, [products, activeProduct]);
 
+  // Light and motion across the storefront (not in the back office).
+  useSacredMotion(currentView !== 'admin', `${currentView}-${selectedProductId}-${selectedNewsId || 'list'}`);
+
   return (
     <div
       className={`min-h-screen flex flex-col bg-[#080705] text-[#F7F2E8] ${
         currentView === 'admin' ? '' : 'pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0'
       }`}
     >
+      {currentView !== 'admin' && <AmbientLight />}
       <IntroSplash
         title={
           !siteConfig.brandTitleThai || siteConfig.brandTitleThai === 'วัตถุมงคล ตชด.'
