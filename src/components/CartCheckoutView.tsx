@@ -1,5 +1,4 @@
 import { BOOKING_CLOSED_MESSAGE, SALES_PAUSED_MESSAGE, isBookingOpen } from '../config/booking';
-import { PaymentPanel } from './PaymentPanel';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
@@ -7,12 +6,14 @@ import {
   Calendar,
   CheckCircle2,
   FileText,
+  ImagePlus,
   Grid,
   MapPin,
   Minus,
   Package,
   Plus,
   QrCode,
+  RefreshCw,
   Trash2,
   Truck,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ import {
   numberToThaiBahtText,
   validateCheckoutForm,
 } from '../utils/commerceRules';
+import { compressSlipImage } from '../utils/slipImage';
 import { SpecimenPlate } from './SacredArtwork';
 import { RajaNumberGridModal } from './RajaNumberGridModal';
 import LineContact from './LineContact';
@@ -79,6 +81,11 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
   const [organization, setOrganization] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  // The transfer slip is required before the reservation can be submitted.
+  const [slipImage, setSlipImage] = useState('');
+  const [slipError, setSlipError] = useState('');
+  const [slipTime, setSlipTime] = useState('');
+  const slipInputRef = React.useRef<HTMLInputElement>(null);
   const [deliveryMethod, setDeliveryMethod] =
     useState<DeliveryMethod>('pickup_bpp');
   const [shippingAddress, setShippingAddress] = useState('');
@@ -123,6 +130,17 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
       siteConfig.freeShippingThreshold
     );
   }, [cart, products, siteConfig, deliveryMethod]);
+
+  const handlePickSlip = async (file: File | undefined) => {
+    setSlipError('');
+    if (!file) return;
+    try {
+      setSlipImage(await compressSlipImage(file));
+    } catch (err) {
+      setSlipImage('');
+      setSlipError(err instanceof Error ? err.message : 'เลือกไฟล์ไม่สำเร็จ');
+    }
+  };
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,6 +195,12 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
       return;
     }
 
+    if (!slipImage) {
+      setSlipError('กรุณาแนบสลิปการโอนเงิน');
+      setErrorMsg('กรุณาโอนเงินและแนบสลิปการโอนก่อนกดสั่งจอง');
+      return;
+    }
+
     setFieldErrors({});
     setSubmitting(true);
 
@@ -197,6 +221,11 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
           transferReference: effectiveTransferRef,
           sessionId,
           idempotencyKey,
+          slip: {
+            image: slipImage,
+            transferAmount: calculation.grandTotal,
+            transferTime: slipTime.trim(),
+          },
         }),
       });
 
@@ -205,6 +234,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
         setErrorMsg(data.error || 'ไม่สามารถบันทึกใบจองได้');
         if (data.fieldErrors) {
           setFieldErrors(data.fieldErrors);
+          if (data.fieldErrors.slip) setSlipError(data.fieldErrors.slip);
         }
         setSubmitting(false);
         return;
@@ -268,12 +298,19 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
             </div>
           </div>
 
-          <PaymentPanel
-            order={confirmedOrder}
-            phoneVerify={confirmedOrder.customerPhone || customerPhone}
-            channels={siteConfig.paymentChannels}
-            onOrderUpdated={(o) => setConfirmedOrder((prev) => (prev ? { ...prev, ...o, customerName: prev.customerName, organization: prev.organization, customerPhone: prev.customerPhone, shippingAddress: prev.shippingAddress } : o))}
-          />
+          <div
+            role="status"
+            className="no-print rounded-2xl border border-emerald-400/50 bg-emerald-950/40 p-5 flex items-start gap-3 text-emerald-100"
+          >
+            <CheckCircle2 className="w-6 h-6 shrink-0 text-emerald-300" />
+            <div className="text-sm space-y-1">
+              <p className="font-bold">ได้รับสลิปการโอนเงินแล้ว — รอเจ้าหน้าที่ตรวจสอบ</p>
+              <p className="text-xs text-emerald-100/80">
+                ยอด ฿{confirmedOrder.grandTotal.toLocaleString()} · ปกติตรวจสอบภายใน 1 วันทำการ
+                หากแนบสลิปผิด แนบใหม่ได้ที่เมนู “ตรวจสอบสถานะ”
+              </p>
+            </div>
+          </div>
 
           <section
             aria-labelledby="receipt-next"
@@ -1012,18 +1049,91 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                   </div>
                   )}
 
+                  <div
+                    className={`p-4 rounded-xl border space-y-3 ${
+                      slipError ? 'border-red-400/70 bg-red-950/30' : 'border-[#FCE694] bg-[#18120A]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-bold text-[#F7F2E8]">แนบสลิปการโอนเงิน *</p>
+                      <p className="text-right">
+                        <span className="block text-[11px] text-[#E5C158]">ยอดที่ต้องโอน</span>
+                        <span className="font-tabular text-lg font-bold text-[#FCE694]">
+                          ฿{calculation.grandTotal.toLocaleString()}
+                        </span>
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-[#F7F2E8]/75">
+                      โอนเงินตามยอดเข้าบัญชีด้านบนก่อน แล้วแนบรูปสลิป จึงจะกดสั่งจองได้
+                    </p>
+                    <input
+                      ref={slipInputRef}
+                      id="checkout-slip"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only"
+                      onChange={(e) => handlePickSlip(e.target.files?.[0])}
+                    />
+                    {slipImage ? (
+                      <div className="flex items-start gap-3">
+                        <img
+                          src={slipImage}
+                          alt="สลิปที่เลือก"
+                          className="w-24 max-h-40 object-contain rounded-lg border border-[#C9A45C]/50 bg-white"
+                        />
+                        <div className="space-y-2">
+                          <p className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4" /> แนบสลิปแล้ว
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => slipInputRef.current?.click()}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#FCE694] underline underline-offset-2 min-h-[40px]"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            เปลี่ยนรูปสลิป
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label
+                        htmlFor="checkout-slip"
+                        className="flex flex-col items-center justify-center gap-2 min-h-[110px] rounded-xl border-2 border-dashed border-[#C9A45C]/60 hover:bg-[#1C160C] cursor-pointer text-center px-4 py-4"
+                      >
+                        <ImagePlus className="w-7 h-7 text-[#FCE694]" />
+                        <span className="text-sm font-bold text-[#FCE694]">แตะเพื่อเลือกรูปสลิป</span>
+                        <span className="text-[11px] text-[#F7F2E8]/70">JPG / PNG / WebP · ระบบย่อขนาดให้อัตโนมัติ</span>
+                      </label>
+                    )}
+                    {slipError && <p className="text-xs text-red-300">{slipError}</p>}
+                    <div>
+                      <label htmlFor="checkout-slip-time" className="block text-[11px] text-[#E5C158] mb-1">
+                        วัน-เวลาที่โอน (ไม่บังคับ)
+                      </label>
+                      <input
+                        id="checkout-slip-time"
+                        type="text"
+                        maxLength={40}
+                        value={slipTime}
+                        onChange={(e) => setSlipTime(e.target.value)}
+                        placeholder="เช่น 14:30 น. วันนี้"
+                        className="w-full px-3 py-2 rounded-lg bg-[#110D08] border border-[#C9A45C]/50 text-[#F7F2E8] text-xs placeholder-[#E5C158]/45"
+                      />
+                    </div>
+                  </div>
+
                   <ol className="rounded-xl border border-[#C9A45C]/40 bg-[#110D08]/90 p-4 text-xs text-[#F7F2E8]/85 space-y-2 list-none">
                     <li className="flex gap-2.5">
                       <span className="w-5 h-5 shrink-0 rounded-full bg-[#FCE694] text-[#18140E] font-bold flex items-center justify-center text-[11px]">1</span>
-                      <span>กด “ยืนยันการจอง” ระบบออกเลขที่คำสั่งจองและล็อกรายการให้ทันที</span>
+                      <span>โอนเงินตามยอดเข้าบัญชีด้านบน</span>
                     </li>
                     <li className="flex gap-2.5">
                       <span className="w-5 h-5 shrink-0 rounded-full bg-[#FCE694] text-[#18140E] font-bold flex items-center justify-center text-[11px]">2</span>
-                      <span>หน้าถัดไปแสดงเลขบัญชีและยอดเงินให้โอน</span>
+                      <span>แนบรูปสลิปการโอน แล้วกด “ยืนยันการจอง” ระบบออกเลขที่คำสั่งจองและล็อกรายการให้ทันที</span>
                     </li>
                     <li className="flex gap-2.5">
                       <span className="w-5 h-5 shrink-0 rounded-full bg-[#FCE694] text-[#18140E] font-bold flex items-center justify-center text-[11px]">3</span>
-                      <span>อัปโหลดรูปสลิปในหน้าเดียวกัน หรือแนบภายหลังที่เมนู “ตรวจสอบสถานะ” ได้ — เจ้าหน้าที่ตรวจสอบแล้วจะส่งใบจองให้ทางอีเมล</span>
+                      <span>เจ้าหน้าที่ตรวจสอบสลิปแล้วจะส่งใบจองให้ทางอีเมล</span>
                     </li>
                   </ol>
 
@@ -1064,7 +1174,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                   <div className="space-y-2">
                     <button
                       type="submit"
-                      disabled={submitting || !calculation.valid || !bookingOpen}
+                      disabled={submitting || !calculation.valid || !bookingOpen || !slipImage}
                       className="w-full py-3.5 px-6 rounded-xl btn-sacred-gold disabled:opacity-50 font-bold text-base transition-all"
                     >
                       {!bookingOpen
@@ -1072,11 +1182,13 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                           ? SALES_PAUSED_MESSAGE
                           : BOOKING_CLOSED_MESSAGE
                         : submitting
-                        ? 'กำลังสร้างเลขที่ใบจองอัตโนมัติ...'
+                        ? 'กำลังส่งคำสั่งจองและสลิป...'
+                        : !slipImage
+                        ? 'แนบสลิปการโอนก่อนกดสั่งจอง'
                         : 'ยืนยันการจอง'}
                     </button>
                     <p className="text-center text-[11px] text-[#E5C158]/80">
-                      เมื่อกดยืนยัน ระบบจะออกเลขที่คำสั่งจองให้ทันที ส่วนใบจองจะส่งทางอีเมลหลังเจ้าหน้าที่ตรวจสอบสลิป
+                      ต้องแนบสลิปการโอนก่อนจึงกดสั่งจองได้ · ใบจองจะส่งทางอีเมลหลังเจ้าหน้าที่ตรวจสอบสลิป
                     </p>
                   </div>
                 </div>

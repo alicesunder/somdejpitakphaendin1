@@ -570,7 +570,7 @@ export function createApp() {
   });
 
   // 3. Create Order (Server-side validation, atomic number lock 1-99, stock check, idempotency)
-  app.post('/api/orders', (req, res) => {
+  app.post('/api/orders', async (req, res) => {
     const closed = salesClosedReason();
     if (closed) {
       res.status(403).json({ error: closed, bookingClosed: true });
@@ -590,6 +590,7 @@ export function createApp() {
       transferReference,
       sessionId,
       idempotencyKey,
+      slip,
     } = req.body || {};
 
     if (idempotencyKey && typeof idempotencyKey === 'string') {
@@ -635,6 +636,18 @@ export function createApp() {
       });
       return;
     }
+
+    // Online reservations are only accepted together with the transfer slip.
+    const slipDataUrl = parseSlipDataUrl(slip?.image);
+    if (!slipDataUrl) {
+      res.status(400).json({
+        error: 'กรุณาโอนเงินและแนบสลิปการโอนก่อนกดสั่งจอง (รองรับ JPG / PNG / WebP)',
+        fieldErrors: { slip: 'กรุณาแนบสลิปการโอนเงิน' },
+      });
+      return;
+    }
+    const slipAmount = Number(slip?.transferAmount);
+    const slipWhen = String(slip?.transferTime || '').trim().slice(0, 40);
 
     const effectiveDeliveryMethod: 'shipping' | 'pickup_bpp' =
       resolvedDeliveryMethod || 'shipping';
@@ -689,8 +702,20 @@ export function createApp() {
       }
     }
 
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const orderNumber = `BPP-2569-${randomSuffix}`;
+    // Four random digits collide quickly once there are a few hundred orders: retry until free.
+    let orderNumber = '';
+    do {
+      orderNumber = `BPP-2569-${Math.floor(1000 + Math.random() * 9000)}`;
+    } while (store.orders.some((o) => o.orderNumber === orderNumber));
+    const orderId = `ord-${now}-${crypto.randomBytes(3).toString('hex')}`;
+
+    try {
+      await writeSlip({ orderId, orderNumber, dataUrl: slipDataUrl, uploadedAt: nowIso });
+    } catch (err) {
+      console.error('Slip save failed:', err);
+      res.status(500).json({ error: 'บันทึกสลิปไม่สำเร็จ กรุณาลองกดสั่งจองอีกครั้ง' });
+      return;
+    }
 
     applyBookingEffects(calc, orderNumber, cleanSession, nowIso);
 
@@ -707,7 +732,7 @@ export function createApp() {
         : rawAddress || cleanOrg;
 
     const newOrder: OrderRecord = {
-      id: `ord-${now}`,
+      id: orderId,
       orderNumber,
       createdAt: nowIso,
       reservationDateThai,
@@ -725,6 +750,11 @@ export function createApp() {
       transferReference: transferReference
         ? String(transferReference).trim()
         : undefined,
+      slipUploadedAt: nowIso,
+      slipCount: 1,
+      slipTransferAmount:
+        Number.isFinite(slipAmount) && slipAmount > 0 ? Math.round(slipAmount * 100) / 100 : undefined,
+      slipTransferTime: slipWhen || undefined,
       items: calc.lineItems,
       selectedNumbers:
         calc.selectedNumbers.length > 0 ? calc.selectedNumbers : undefined,
@@ -737,6 +767,17 @@ export function createApp() {
       shippingStatus: 'not_shipped',
       sessionId: cleanSession || undefined,
       statusHistory: [
+        {
+          id: `log-${now}-slip`,
+          timestamp: nowIso,
+          actor: 'ผู้จอง (แนบสลิป)',
+          paymentStatus: 'pending_verification',
+          preparationStatus: 'awaiting_payment',
+          shippingStatus: 'not_shipped',
+          note: `แนบหลักฐานการโอนเงินพร้อมคำสั่งจอง${
+            Number.isFinite(slipAmount) && slipAmount > 0 ? ` ยอด ฿${slipAmount.toLocaleString()}` : ''
+          }${slipWhen ? ` เวลาโอน ${slipWhen}` : ''} รอเจ้าหน้าที่ตรวจสอบ`,
+        },
         {
           id: `log-${now}`,
           timestamp: nowIso,

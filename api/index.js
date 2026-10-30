@@ -1077,7 +1077,7 @@ function validateCheckoutForm(input) {
   }
   if (input.customerEmail !== void 0) {
     const email = input.customerEmail.trim();
-    if (!/^[^s@]+@[^s@]+.[^s@]{2,}$/.test(email) || email.length > 120) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) {
       fieldErrors.customerEmail = "\u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E30\u0E1A\u0E38\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E43\u0E2B\u0E49\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07 (\u0E43\u0E0A\u0E49\u0E2A\u0E48\u0E07\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E2A\u0E25\u0E34\u0E1B)";
     }
   }
@@ -2151,7 +2151,7 @@ function createApp() {
     );
     res.json(calc);
   });
-  app2.post("/api/orders", (req, res) => {
+  app2.post("/api/orders", async (req, res) => {
     const closed = salesClosedReason();
     if (closed) {
       res.status(403).json({ error: closed, bookingClosed: true });
@@ -2170,7 +2170,8 @@ function createApp() {
       paymentMethod,
       transferReference,
       sessionId,
-      idempotencyKey
+      idempotencyKey,
+      slip
     } = req.body || {};
     if (idempotencyKey && typeof idempotencyKey === "string") {
       {
@@ -2206,6 +2207,16 @@ function createApp() {
       });
       return;
     }
+    const slipDataUrl = parseSlipDataUrl(slip?.image);
+    if (!slipDataUrl) {
+      res.status(400).json({
+        error: "\u0E01\u0E23\u0E38\u0E13\u0E32\u0E42\u0E2D\u0E19\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E41\u0E19\u0E1A\u0E2A\u0E25\u0E34\u0E1B\u0E01\u0E32\u0E23\u0E42\u0E2D\u0E19\u0E01\u0E48\u0E2D\u0E19\u0E01\u0E14\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07 (\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A JPG / PNG / WebP)",
+        fieldErrors: { slip: "\u0E01\u0E23\u0E38\u0E13\u0E32\u0E41\u0E19\u0E1A\u0E2A\u0E25\u0E34\u0E1B\u0E01\u0E32\u0E23\u0E42\u0E2D\u0E19\u0E40\u0E07\u0E34\u0E19" }
+      });
+      return;
+    }
+    const slipAmount = Number(slip?.transferAmount);
+    const slipWhen = String(slip?.transferTime || "").trim().slice(0, 40);
     const effectiveDeliveryMethod = resolvedDeliveryMethod || "shipping";
     const calc = calculateOrderTotals(
       Array.isArray(items) ? items : [],
@@ -2244,15 +2255,25 @@ function createApp() {
         }
       }
     }
-    const randomSuffix = Math.floor(1e3 + Math.random() * 9e3);
-    const orderNumber = `BPP-2569-${randomSuffix}`;
+    let orderNumber = "";
+    do {
+      orderNumber = `BPP-2569-${Math.floor(1e3 + Math.random() * 9e3)}`;
+    } while (store.orders.some((o) => o.orderNumber === orderNumber));
+    const orderId = `ord-${now}-${crypto.randomBytes(3).toString("hex")}`;
+    try {
+      await writeSlip({ orderId, orderNumber, dataUrl: slipDataUrl, uploadedAt: nowIso });
+    } catch (err) {
+      console.error("Slip save failed:", err);
+      res.status(500).json({ error: "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E2A\u0E25\u0E34\u0E1B\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E25\u0E2D\u0E07\u0E01\u0E14\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07" });
+      return;
+    }
     applyBookingEffects(calc, orderNumber, cleanSession, nowIso);
     const reservationDateThai = formatThaiDate(nowIso);
     const grandTotalThaiText = numberToThaiBahtText(calc.grandTotal);
     const rawAddress = String(shippingAddress || "").trim();
     const formattedShippingAddress = effectiveDeliveryMethod === "pickup_bpp" ? rawAddress && !rawAddress.includes("\u0E21\u0E32\u0E23\u0E31\u0E1A\u0E40\u0E2D\u0E07") ? `\u0E21\u0E32\u0E23\u0E31\u0E1A\u0E40\u0E2D\u0E07\u0E17\u0E35\u0E48 \u0E1A\u0E0A.\u0E15\u0E0A\u0E14. (\u0E01\u0E2D\u0E07\u0E1A\u0E31\u0E0D\u0E0A\u0E32\u0E01\u0E32\u0E23\u0E15\u0E33\u0E23\u0E27\u0E08\u0E15\u0E23\u0E30\u0E40\u0E27\u0E19\u0E0A\u0E32\u0E22\u0E41\u0E14\u0E19 \u0E16\u0E19\u0E19\u0E1E\u0E2B\u0E25\u0E42\u0E22\u0E18\u0E34\u0E19 \u0E1E\u0E0D\u0E32\u0E44\u0E17 \u0E01\u0E23\u0E38\u0E07\u0E40\u0E17\u0E1E\u0E2F 10400) \u2014 \u0E2B\u0E21\u0E32\u0E22\u0E40\u0E2B\u0E15\u0E38: ${rawAddress}` : rawAddress || "\u0E21\u0E32\u0E23\u0E31\u0E1A\u0E40\u0E2D\u0E07\u0E17\u0E35\u0E48 \u0E1A\u0E0A.\u0E15\u0E0A\u0E14. (\u0E01\u0E2D\u0E07\u0E1A\u0E31\u0E0D\u0E0A\u0E32\u0E01\u0E32\u0E23\u0E15\u0E33\u0E23\u0E27\u0E08\u0E15\u0E23\u0E30\u0E40\u0E27\u0E19\u0E0A\u0E32\u0E22\u0E41\u0E14\u0E19 \u0E16\u0E19\u0E19\u0E1E\u0E2B\u0E25\u0E42\u0E22\u0E18\u0E34\u0E19 \u0E1E\u0E0D\u0E32\u0E44\u0E17 \u0E01\u0E23\u0E38\u0E07\u0E40\u0E17\u0E1E\u0E2F 10400)" : rawAddress || cleanOrg;
     const newOrder = {
-      id: `ord-${now}`,
+      id: orderId,
       orderNumber,
       createdAt: nowIso,
       reservationDateThai,
@@ -2265,6 +2286,10 @@ function createApp() {
       postalCode: effectiveDeliveryMethod === "pickup_bpp" ? "10400" : String(postalCode || "10400").trim(),
       paymentMethod: paymentMethod || "promptpay",
       transferReference: transferReference ? String(transferReference).trim() : void 0,
+      slipUploadedAt: nowIso,
+      slipCount: 1,
+      slipTransferAmount: Number.isFinite(slipAmount) && slipAmount > 0 ? Math.round(slipAmount * 100) / 100 : void 0,
+      slipTransferTime: slipWhen || void 0,
       items: calc.lineItems,
       selectedNumbers: calc.selectedNumbers.length > 0 ? calc.selectedNumbers : void 0,
       subtotal: calc.subtotal,
@@ -2276,6 +2301,15 @@ function createApp() {
       shippingStatus: "not_shipped",
       sessionId: cleanSession || void 0,
       statusHistory: [
+        {
+          id: `log-${now}-slip`,
+          timestamp: nowIso,
+          actor: "\u0E1C\u0E39\u0E49\u0E08\u0E2D\u0E07 (\u0E41\u0E19\u0E1A\u0E2A\u0E25\u0E34\u0E1B)",
+          paymentStatus: "pending_verification",
+          preparationStatus: "awaiting_payment",
+          shippingStatus: "not_shipped",
+          note: `\u0E41\u0E19\u0E1A\u0E2B\u0E25\u0E31\u0E01\u0E10\u0E32\u0E19\u0E01\u0E32\u0E23\u0E42\u0E2D\u0E19\u0E40\u0E07\u0E34\u0E19\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07${Number.isFinite(slipAmount) && slipAmount > 0 ? ` \u0E22\u0E2D\u0E14 \u0E3F${slipAmount.toLocaleString()}` : ""}${slipWhen ? ` \u0E40\u0E27\u0E25\u0E32\u0E42\u0E2D\u0E19 ${slipWhen}` : ""} \u0E23\u0E2D\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A`
+        },
         {
           id: `log-${now}`,
           timestamp: nowIso,
