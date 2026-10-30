@@ -229,6 +229,21 @@ test('validateCheckoutForm requires customerName, organization, and valid Thai p
   assert.equal(valid.valid, true);
 });
 
+test('validateCheckoutForm accepts ordinary email addresses and rejects malformed ones', () => {
+  const base = {
+    customerName: 'ส.ต.ต. ชัยโรจน์ สหัสภูริพัฒน์',
+    organization: 'บช.ตชด.',
+    customerPhone: '0656541786',
+    paymentMethod: 'bank_transfer' as const,
+  };
+  for (const email of ['nakanosachiko1@gmail.com', 'first.last+tag@sub.example.co.th', ' spaced@yahoo.com ']) {
+    assert.equal(validateCheckoutForm({ ...base, customerEmail: email }).valid, true, email);
+  }
+  for (const email of ['', 'no-at-sign.com', 'a@b', 'two words@gmail.com', 'x@gmail.c']) {
+    assert.ok(validateCheckoutForm({ ...base, customerEmail: email }).fieldErrors.customerEmail, email);
+  }
+});
+
 test('filterAndSortProducts excludes hidden products and sorts by price ascending', () => {
   const result = filterAndSortProducts(mockProducts, {
     sortBy: 'price_asc',

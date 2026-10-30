@@ -445,7 +445,7 @@ export function validateCheckoutForm(input: CheckoutFormInput): {
 
   if (input.customerEmail !== undefined) {
     const email = input.customerEmail.trim();
-    if (!/^[^s@]+@[^s@]+.[^s@]{2,}$/.test(email) || email.length > 120) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) {
       fieldErrors.customerEmail = 'กรุณาระบุอีเมลให้ถูกต้อง (ใช้ส่งใบจองหลังเจ้าหน้าที่ตรวจสอบสลิป)';
     }
   }
