@@ -336,7 +336,7 @@
     display: none !important;
   }
 
-  /* Tracking page: print the certificate alone */
+  /* Admin dashboard: print the certificate alone (for signing) */
   body.printing-certificate * {
     visibility: hidden !important;
   }

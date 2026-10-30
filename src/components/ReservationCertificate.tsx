@@ -8,8 +8,8 @@ import {
 import { BppCrestLogo } from './SacredArtwork';
 
 /**
- * The formal reservation certificate (ใบจองวัตถุมงคล). Buyers only get it once staff have
- * approved their payment slip: on the tracking page, and by email.
+ * The formal reservation certificate (ใบจองวัตถุมงคล). Staff print it from the admin dashboard,
+ * sign it, and email the signed scan to the buyer.
  */
 export const ReservationCertificate: React.FC<{
   order: PublicTrackedOrder;
@@ -246,6 +246,12 @@ export const ReservationCertificate: React.FC<{
         </div>
 
         <div className="flex flex-col sm:items-end justify-end space-y-1">
+          <div className="pt-6 pb-2 text-center sm:w-64 space-y-1">
+            <p>ลงชื่อ ........................................</p>
+            <p>(........................................)</p>
+            <p className="font-bold text-[#18140E]">เจ้าหน้าที่ผู้ตรวจสอบ</p>
+            <p>วันที่ ............/............/............</p>
+          </div>
           <p className="font-bold text-[#18140E]">
             กองบัญชาการตำรวจตระเวนชายแดน
           </p>

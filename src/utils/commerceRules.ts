@@ -535,6 +535,7 @@ export function maskCustomerPII(order: OrderRecord): PublicTrackedOrder {
     slipUploadedAt: order.slipUploadedAt,
     slipTransferAmount: order.slipTransferAmount,
     slipTransferTime: order.slipTransferTime,
+    receiptEmailedAt: order.receiptEmailedAt,
     items: order.items,
     selectedNumbers: order.selectedNumbers,
     subtotal: order.subtotal,

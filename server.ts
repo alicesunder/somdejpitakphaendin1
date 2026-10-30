@@ -38,7 +38,7 @@ import {
 import { createPostgresStore, isPostgresConfigured } from './server/postgresStore';
 import { HitFn, memoryHit, rateLimiter } from './server/rateLimit';
 import { BOOKING_CLOSED_MESSAGE, SALES_PAUSED_MESSAGE, isBookingOpen } from './src/config/booking';
-import { isMailConfigured, sendReceiptEmail } from './server/mailer';
+import { isMailConfigured, isValidEmail, sendReceiptEmail } from './server/mailer';
 
 interface StoreData {
   siteConfig: SiteConfig;
@@ -371,6 +371,25 @@ function releaseOrderReservations(order: OrderRecord): void {
   purgeExpiredRajaSlotHolds();
 }
 
+const RECEIPT_MAX_BYTES = 3 * 1024 * 1024;
+
+/** A signed receipt from the admin: PDF, JPEG or PNG data URL whose bytes really are that type. */
+function parseReceiptFile(raw: unknown): { content: Buffer; contentType: string; ext: string } | null {
+  const dataUrl = typeof raw === 'object' && raw ? (raw as { dataUrl?: unknown }).dataUrl : undefined;
+  if (typeof dataUrl !== 'string') return null;
+  const m = /^data:(application\/pdf|image\/jpeg|image\/png);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!m) return null;
+  const content = Buffer.from(m[2], 'base64');
+  if (content.length === 0 || content.length > RECEIPT_MAX_BYTES) return null;
+  const ok =
+    (m[1] === 'application/pdf' && content.subarray(0, 5).toString('ascii') === '%PDF-') ||
+    (m[1] === 'image/jpeg' && content[0] === 0xff && content[1] === 0xd8) ||
+    (m[1] === 'image/png' && content[0] === 0x89 && content.subarray(1, 4).toString('ascii') === 'PNG');
+  if (!ok) return null;
+  const ext = m[1] === 'application/pdf' ? 'pdf' : m[1] === 'image/png' ? 'png' : 'jpg';
+  return { content, contentType: m[1], ext };
+}
+
 /** Locks the chosen 1–99 numbers as booked and moves stock / booked counters for a new order. */
 function applyBookingEffects(
   calc: { selectedNumbers: number[]; lineItems: { productId: string; quantity: number }[] },
@@ -406,6 +425,8 @@ export function createApp() {
   const app = express();
   app.disable('x-powered-by');
 
+  // Signed receipts (PDF / photo) are attached from the admin dashboard; Vercel caps bodies at 4.5 MB.
+  app.use('/api/admin/orders', express.json({ limit: '4.5mb' }));
   app.use(express.json({ limit: '2mb' }));
   app.use('/api', (_req, res, next) => {
     res.set({
@@ -1373,7 +1394,7 @@ export function createApp() {
   });
 
   // 9. Admin Order Status & Tracking Update (With Audit Trail & Raja Slot Release on Reject)
-  app.patch('/api/admin/orders/:id/status', requireAdmin, async (req, res) => {
+  app.patch('/api/admin/orders/:id/status', requireAdmin, (req, res) => {
     const order = store.orders.find((o) => o.id === req.params.id);
     if (!order) {
       res.status(404).json({ error: 'ไม่พบรายการคำสั่งจอง' });
@@ -1428,20 +1449,8 @@ export function createApp() {
         }`,
     });
 
-    // Approving the slip sends the reservation certificate to the buyer. It goes out before the
-    // response (a serverless function stops once it has answered); a failed send never blocks the
-    // approval — staff can resend from the order.
-    let receiptEmail = null;
-    if (previousPaymentStatus !== 'verified_paid' && order.paymentStatus === 'verified_paid') {
-      receiptEmail = await sendReceiptEmail(order, store.siteConfig);
-      if (receiptEmail.sent) {
-        order.receiptEmailedAt = new Date().toISOString();
-        order.statusHistory[0].note += ` · ส่งใบจองทางอีเมลแล้ว (${receiptEmail.to})`;
-      }
-    }
-
     saveStore(store);
-    res.json({ order, rajaSlots: enrichRajaSlotsForAdmin(), receiptEmail });
+    res.json({ order, rajaSlots: enrichRajaSlotsForAdmin() });
   });
 
   // 9a. Delete an order outright (test bookings, duplicates). Frees its numbers and stock
@@ -1464,7 +1473,8 @@ export function createApp() {
     res.json({ deleted: order.orderNumber, rajaSlots: enrichRajaSlotsForAdmin() });
   });
 
-  // 9b. Re-send the reservation certificate by email (approved orders only)
+  // 9b. Email the buyer the reservation certificate that staff signed and scanned (PDF / JPG /
+  // PNG, sent as an attachment; the file itself is not stored). Approved orders only.
   app.post('/api/admin/orders/:id/send-receipt', requireAdmin, async (req, res) => {
     const order = store.orders.find((o) => o.id === req.params.id);
     if (!order) {
@@ -1475,10 +1485,41 @@ export function createApp() {
       res.status(409).json({ error: 'ส่งใบจองได้หลังยืนยันการชำระเงินแล้วเท่านั้น' });
       return;
     }
+    const file = parseReceiptFile(req.body?.file);
+    if (!file) {
+      res.status(400).json({ error: 'กรุณาแนบไฟล์ใบจองที่ลงนามแล้ว (PDF, JPG หรือ PNG ไม่เกิน 3 MB)' });
+      return;
+    }
     const email = String(req.body?.email ?? '').trim();
-    if (email) order.customerEmail = email.slice(0, 120);
-    const receiptEmail = await sendReceiptEmail(order, store.siteConfig);
-    if (receiptEmail.sent) order.receiptEmailedAt = new Date().toISOString();
+    if (!isValidEmail(email)) {
+      res.status(400).json({ error: 'กรุณาระบุอีเมลผู้ซื้อให้ถูกต้อง' });
+      return;
+    }
+    if (!isMailConfigured()) {
+      res.status(503).json({ error: 'ยังไม่ได้ตั้งค่าบัญชีอีเมลผู้ส่ง (SMTP) จึงส่งอีเมลไม่ได้' });
+      return;
+    }
+    order.customerEmail = email.slice(0, 120);
+    const receiptEmail = await sendReceiptEmail(order, store.siteConfig, {
+      filename: `ใบจอง-${order.orderNumber}.${file.ext}`,
+      content: file.content,
+      contentType: file.contentType,
+    });
+    if (!receiptEmail.sent) {
+      res.status(502).json({ error: 'ส่งอีเมลไม่สำเร็จ กรุณาลองอีกครั้ง', receiptEmail });
+      return;
+    }
+    const nowIso = new Date().toISOString();
+    order.receiptEmailedAt = nowIso;
+    order.statusHistory.unshift({
+      id: `log-${Date.now()}`,
+      timestamp: nowIso,
+      actor: 'ผู้ดูแลคลังวัตถุมงคล (Admin)',
+      paymentStatus: order.paymentStatus,
+      preparationStatus: order.preparationStatus,
+      shippingStatus: order.shippingStatus,
+      note: 'ส่งใบจองที่ลงนามโดยเจ้าหน้าที่ไปทางอีเมลแล้ว',
+    });
     saveStore(store);
     res.json({ order, receiptEmail });
   });

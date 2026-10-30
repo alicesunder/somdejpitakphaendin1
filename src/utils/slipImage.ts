@@ -20,7 +20,11 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   });
 }
 
-export async function compressSlipImage(file: File): Promise<string> {
+/** Shrinks a photo to a JPEG data URL under maxChars (defaults suit payment slips). */
+export async function compressSlipImage(
+  file: File,
+  { maxSide: startSide = 1400, maxChars = SLIP_MAX_DATA_URL_CHARS }: { maxSide?: number; maxChars?: number } = {},
+): Promise<string> {
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
     throw new Error('รองรับเฉพาะไฟล์ภาพ JPG, PNG หรือ WebP');
   }
@@ -29,7 +33,7 @@ export async function compressSlipImage(file: File): Promise<string> {
   }
   const img = await loadImage(file);
 
-  let maxSide = 1400;
+  let maxSide = startSide;
   let quality = 0.78;
   for (let attempt = 0; attempt < 6; attempt++) {
     const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
@@ -42,7 +46,7 @@ export async function compressSlipImage(file: File): Promise<string> {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL('image/jpeg', quality);
-    if (dataUrl.length <= SLIP_MAX_DATA_URL_CHARS - 50_000) return dataUrl;
+    if (dataUrl.length <= maxChars - 50_000) return dataUrl;
     maxSide = Math.round(maxSide * 0.8);
     quality = Math.max(0.5, quality - 0.08);
   }

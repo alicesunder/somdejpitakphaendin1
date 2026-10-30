@@ -1,5 +1,8 @@
 import { AdminNewOrderModal } from './AdminNewOrderModal';
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { ReservationCertificate } from './ReservationCertificate';
+import { compressSlipImage } from '../utils/slipImage';
 import {
   CheckCircle2,
   Download,
@@ -11,7 +14,9 @@ import {
   LogOut,
   Mail,
   Package,
+  Paperclip,
   Power,
+  Printer,
   Plus,
   RotateCcw,
   Settings,
@@ -145,14 +150,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setTimeout(() => setStatusBanner(null), ms);
   };
 
-  type ReceiptEmail = { sent: boolean; to?: string; reason?: string } | null;
-  const describeReceiptEmail = (r: ReceiptEmail): string => {
-    if (!r) return '';
-    if (r.sent) return ` · ส่งใบจองไปที่ ${r.to} แล้ว`;
-    if (r.reason === 'no_email') return ' · ใบจองนี้ไม่มีอีเมลผู้ซื้อ จึงไม่ได้ส่งใบจอง';
-    if (r.reason === 'not_configured') return ' · ยังไม่ได้ตั้งค่าระบบอีเมล จึงยังไม่ได้ส่งใบจอง';
-    return ' · ส่งอีเมลใบจองไม่สำเร็จ กดส่งใหม่ได้ในหน้ารายละเอียดใบจอง';
-  };
 
   const [salesBusy, setSalesBusy] = useState(false);
   const handleToggleSales = async () => {
@@ -219,28 +216,78 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
+  // Signed certificate: staff print it, sign it, scan or photograph it, attach it and send it.
+  const [printOrder, setPrintOrder] = useState<OrderRecord | null>(null);
+  const handlePrintCertificate = (order: OrderRecord) => {
+    setPrintOrder(order);
+    // Let the portal render before the print dialog opens.
+    setTimeout(() => {
+      document.body.classList.add('printing-certificate');
+      const done = () => {
+        document.body.classList.remove('printing-certificate');
+        setPrintOrder(null);
+      };
+      window.addEventListener('afterprint', done, { once: true });
+      window.print();
+    }, 50);
+  };
+
+  const [receiptFile, setReceiptFile] = useState<{ name: string; dataUrl: string } | null>(null);
+  const [receiptEmail, setReceiptEmail] = useState('');
+  const [receiptError, setReceiptError] = useState('');
   const [receiptBusy, setReceiptBusy] = useState(false);
-  const handleResendReceipt = async () => {
-    if (!adminToken || !selectedOrder || receiptBusy) return;
-    const email = window.prompt('ส่งใบจองไปที่อีเมล', selectedOrder.customerEmail || '');
-    if (email === null) return;
+  useEffect(() => {
+    setReceiptFile(null);
+    setReceiptError('');
+    setReceiptEmail(selectedOrder?.customerEmail || '');
+  }, [selectedOrder?.id]);
+
+  const handlePickReceipt = async (file: File | undefined) => {
+    setReceiptError('');
+    setReceiptFile(null);
+    if (!file) return;
+    try {
+      if (file.type === 'application/pdf') {
+        if (file.size > 3 * 1024 * 1024) throw new Error('ไฟล์ PDF ใหญ่เกิน 3 MB กรุณาสแกนให้เล็กลง');
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result));
+          r.onerror = () => reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
+          r.readAsDataURL(file);
+        });
+        setReceiptFile({ name: file.name, dataUrl });
+      } else {
+        // Photos of the signed page: keep them sharp enough to read, but small enough to send.
+        const dataUrl = await compressSlipImage(file, { maxSide: 2200, maxChars: 3_500_000 });
+        setReceiptFile({ name: file.name, dataUrl });
+      }
+    } catch (err) {
+      setReceiptError(err instanceof Error ? err.message : 'เลือกไฟล์ไม่สำเร็จ');
+    }
+  };
+
+  const handleSendReceipt = async () => {
+    if (!adminToken || !selectedOrder || !receiptFile || receiptBusy) return;
+    if (!window.confirm(`ส่งใบจอง ${selectedOrder.orderNumber} ไปที่ ${receiptEmail.trim()} ?`)) return;
     setReceiptBusy(true);
+    setReceiptError('');
     try {
       const res = await fetch(`/api/admin/orders/${selectedOrder.id}/send-receipt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: receiptEmail.trim(), file: { name: receiptFile.name, dataUrl: receiptFile.dataUrl } }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        showToast((data && data.error) || 'ส่งใบจองไม่สำเร็จ', 6000);
+        setReceiptError((data && data.error) || (res.status === 413 ? 'ไฟล์ใหญ่เกินไป' : 'ส่งใบจองไม่สำเร็จ'));
         return;
       }
       if (data.order) setSelectedOrder(data.order);
+      setReceiptFile(null);
       await fetchDashboard(adminToken);
-      showToast(`ใบจอง ${selectedOrder.orderNumber}${describeReceiptEmail(data.receiptEmail)}`, 7000);
+      showToast(`ส่งใบจอง ${selectedOrder.orderNumber} ไปที่ ${receiptEmail.trim()} แล้ว`, 7000);
     } catch {
-      showToast('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ', 6000);
+      setReceiptError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ');
     } finally {
       setReceiptBusy(false);
     }
@@ -446,14 +493,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     });
 
     if (res.ok) {
-      const data = await res.json().catch(() => null);
-      const emailNote = describeReceiptEmail(data?.receiptEmail ?? null);
       setSelectedOrder(null);
       await fetchDashboard(adminToken);
       onStoreUpdated();
       showToast(
-        `อัปเดตสถานะใบจอง ${selectedOrder.orderNumber} เรียบร้อยแล้ว${emailNote}`,
-        emailNote ? 8000 : 3500,
+        `อัปเดตสถานะใบจอง ${selectedOrder.orderNumber} เรียบร้อยแล้ว`
       );
     }
   };
@@ -691,12 +735,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           >
             <Mail className="w-5 h-5 shrink-0 text-[#8A6D2F] mt-0.5" />
             <div className="text-xs text-[#29222E] space-y-1">
-              <p className="font-bold text-sm text-[#14100A]">ส่งใบจองทางอีเมล</p>
-              {dashboardData.mailConfigured ? (
-                <p>เมื่อกด “สลิปถูกต้อง ยืนยันรับชำระ” แล้วบันทึก ระบบจะส่งใบจองไปที่อีเมลผู้ซื้อให้อัตโนมัติ</p>
-              ) : (
-                <p>
-                  ยังไม่ได้ตั้งค่าบัญชีอีเมลผู้ส่ง ระบบจึงยังไม่ส่งใบจองทางอีเมล (ผู้ซื้อยังพิมพ์ใบจองได้ที่หน้า “ตรวจสอบสถานะ”)
+              <p className="font-bold text-sm text-[#14100A]">ส่งใบจองที่ลงนามแล้วทางอีเมล</p>
+              <p>เปิดใบจองที่ยืนยันชำระแล้ว → พิมพ์ใบจอง → ลงนาม → สแกนหรือถ่ายรูป → แนบไฟล์แล้วกดส่งให้ผู้ซื้อ</p>
+              {!dashboardData.mailConfigured && (
+                <p className="font-bold text-amber-800">
+                  ยังไม่ได้ตั้งค่าบัญชีอีเมลผู้ส่ง (SMTP) จึงยังกดส่งไม่ได้
                 </p>
               )}
             </div>
@@ -1142,17 +1185,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             </span>
                           )}
                         </p>
-                        {selectedOrder.paymentStatus === 'verified_paid' && (
-                          <button
-                            type="button"
-                            onClick={handleResendReceipt}
-                            disabled={receiptBusy}
-                            className="mt-1 px-3 py-2 min-h-[40px] rounded-lg border border-[#C9A45C] bg-[#FFF9EA] text-[#14100A] text-xs font-bold inline-flex items-center gap-1.5 disabled:opacity-60"
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            {receiptBusy ? 'กำลังส่ง...' : selectedOrder.receiptEmailedAt ? 'ส่งใบจองทางอีเมลอีกครั้ง' : 'ส่งใบจองทางอีเมล'}
-                          </button>
-                        )}
+
                         <p><strong>รหัสไปรษณีย์:</strong> {selectedOrder.postalCode || '-'}</p>
                         <p>
                           <strong>ช่องทางชำระ:</strong>{' '}
@@ -1190,6 +1223,67 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         </div>
                       </div>
                     </details>
+
+                    {selectedOrder.paymentStatus === 'verified_paid' && (
+                      <section className="rounded-xl border border-[#C9A45C] bg-[#FFF9EA] p-3 space-y-2.5 text-xs text-[#29222E]" aria-label="ส่งใบจองที่ลงนามแล้ว">
+                        <p className="font-bold text-sm text-[#14100A]">ใบจองที่ลงนามแล้ว</p>
+                        {selectedOrder.receiptEmailedAt && (
+                          <p className="text-emerald-700 font-semibold">
+                            ส่งแล้วเมื่อ {new Date(selectedOrder.receiptEmailedAt).toLocaleString('th-TH')} — ส่งซ้ำได้หากต้องการ
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handlePrintCertificate(selectedOrder)}
+                          className="px-3 py-2 min-h-[40px] rounded-lg border border-[#C9A45C] bg-white text-[#14100A] font-bold inline-flex items-center gap-1.5"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          1. พิมพ์ใบจองเพื่อลงนาม
+                        </button>
+                        <div>
+                          <label className="font-semibold block mb-1" htmlFor="receipt-file">
+                            2. แนบไฟล์ใบจองที่ลงนามแล้ว (PDF, JPG หรือ PNG)
+                          </label>
+                          <input
+                            id="receipt-file"
+                            type="file"
+                            accept="application/pdf,image/jpeg,image/png"
+                            onChange={(e) => handlePickReceipt(e.target.files?.[0])}
+                            className="block w-full text-xs file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border file:border-[#C9A45C] file:bg-white file:font-bold"
+                          />
+                          {receiptFile && (
+                            <p className="mt-1 inline-flex items-center gap-1 text-emerald-700 font-semibold">
+                              <Paperclip className="w-3.5 h-3.5" /> {receiptFile.name}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="font-semibold block mb-1" htmlFor="receipt-email">
+                            3. อีเมลผู้ซื้อ
+                          </label>
+                          <input
+                            id="receipt-email"
+                            type="email"
+                            value={receiptEmail}
+                            onChange={(e) => setReceiptEmail(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-[#C9A45C] bg-white"
+                          />
+                        </div>
+                        {receiptError && <p role="alert" className="text-red-700 font-semibold">{receiptError}</p>}
+                        <button
+                          type="button"
+                          onClick={handleSendReceipt}
+                          disabled={!receiptFile || !receiptEmail.trim() || receiptBusy || !dashboardData?.mailConfigured}
+                          className="w-full px-3 py-2.5 min-h-[44px] rounded-lg bg-[#14100A] text-[#FCE694] font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          <Mail className="w-4 h-4" />
+                          {receiptBusy ? 'กำลังส่ง...' : 'ส่งใบจองให้ผู้ซื้อทางอีเมล'}
+                        </button>
+                        {!dashboardData?.mailConfigured && (
+                          <p className="text-amber-800">ยังไม่ได้ตั้งค่าบัญชีอีเมลผู้ส่ง (SMTP) จึงยังกดส่งไม่ได้</p>
+                        )}
+                      </section>
+                    )}
 
                     <div className="flex justify-end">
                       <button
@@ -1873,6 +1967,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           )}
         </>
       )}
+      {printOrder &&
+        dashboardData &&
+        createPortal(
+          <div className="hidden print:block">
+            <ReservationCertificate
+              order={{ ...printOrder, maskedCustomerName: printOrder.customerName, maskedPhone: printOrder.customerPhone }}
+              siteConfig={dashboardData.siteConfig}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };

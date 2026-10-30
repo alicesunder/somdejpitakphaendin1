@@ -321,9 +321,9 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
               ใบจองจะได้รับหลังเจ้าหน้าที่ตรวจสอบสลิป
             </h2>
             <p className="text-sm text-[#F7F2E8]/85 leading-relaxed">
-              เมื่อเจ้าหน้าที่อนุมัติสลิปแล้ว ระบบจะส่งใบจองไปที่อีเมล{' '}
+              เมื่อเจ้าหน้าที่ตรวจสอบสลิปแล้ว จะส่งใบจองที่ลงนามโดยเจ้าหน้าที่ไปที่อีเมล{' '}
               <strong className="text-[#FCE694] break-all">{customerEmail.trim()}</strong>{' '}
-              และดาวน์โหลด/พิมพ์ได้ที่เมนู “ตรวจสอบสถานะ” (ใช้เลขที่คำสั่งจองและเบอร์โทร 4 ตัวท้าย)
+              ติดตามสถานะได้ที่เมนู “ตรวจสอบสถานะ” (ใช้เลขที่คำสั่งจองและเบอร์โทร 4 ตัวท้าย)
             </p>
             <ul className="text-xs text-[#F7F2E8]/80 space-y-1">
               {confirmedOrder.items.map((item, idx) => (
@@ -761,7 +761,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                       <p className="text-xs text-red-300 mt-1">{fieldErrors.customerEmail}</p>
                     ) : (
                       <p className="text-[11px] text-[#E5C158]/80 mt-1">
-                        ระบบจะส่งใบจองไปที่อีเมลนี้หลังเจ้าหน้าที่ตรวจสอบสลิปการโอนแล้ว
+                        เจ้าหน้าที่จะส่งใบจองที่ลงนามแล้วไปที่อีเมลนี้ หลังตรวจสอบสลิปการโอน
                       </p>
                     )}
                   </div>

@@ -183,6 +183,8 @@ export interface PublicTrackedOrder {
   slipUploadedAt?: string;
   slipTransferAmount?: number;
   slipTransferTime?: string;
+  /** When staff emailed the signed certificate */
+  receiptEmailedAt?: string;
   items: OrderLineItem[];
   selectedNumbers?: number[];
   subtotal: number;

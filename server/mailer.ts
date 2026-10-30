@@ -2,7 +2,9 @@ import nodemailer from 'nodemailer';
 import type { OrderRecord, SiteConfig } from '../src/types';
 
 /**
- * Sends the reservation certificate (ใบจอง) to the buyer once staff have approved the slip.
+ * Emails the buyer the reservation certificate (ใบจอง) that staff have printed, signed and
+ * scanned. Staff attach the file and press send in the admin dashboard; nothing goes out
+ * automatically.
  *
  * Configured with SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS and optionally MAIL_FROM
  * (e.g. a Gmail account with an app password: smtp.gmail.com, port 465).
@@ -76,7 +78,7 @@ export function buildReceiptEmail(order: OrderRecord, config: SiteConfig) {
     <p style="margin:0 0 16px;font-size:13px;color:#5A5244">เลขที่ใบจอง <b style="color:#18140E">${esc(order.orderNumber)}</b> · วันที่จอง ${esc(date)}</p>
 
     <div style="background:#E8F5E9;border:1px solid #81C784;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:16px">
-      ✅ เจ้าหน้าที่ตรวจสอบการชำระเงินเรียบร้อยแล้ว ใบจองนี้ใช้เป็นหลักฐานการสั่งจองได้
+      📎 ใบจองที่ลงนามโดยเจ้าหน้าที่แนบมากับอีเมลนี้ กรุณาเก็บไว้เป็นหลักฐานการสั่งจอง
     </div>
 
     <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:12px">
@@ -111,7 +113,7 @@ export function buildReceiptEmail(order: OrderRecord, config: SiteConfig) {
   const text = [
     subject,
     `วันที่จอง ${date}`,
-    'เจ้าหน้าที่ตรวจสอบการชำระเงินเรียบร้อยแล้ว',
+    'ใบจองที่ลงนามโดยเจ้าหน้าที่แนบมากับอีเมลนี้',
     '',
     `ชื่อผู้จอง: ${order.customerName}`,
     `หน่วยงาน: ${order.organization || 'ประชาชนทั่วไป'}`,
@@ -132,7 +134,17 @@ export function buildReceiptEmail(order: OrderRecord, config: SiteConfig) {
   return { subject, html, text };
 }
 
-export async function sendReceiptEmail(order: OrderRecord, config: SiteConfig): Promise<ReceiptEmailResult> {
+export interface ReceiptAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
+export async function sendReceiptEmail(
+  order: OrderRecord,
+  config: SiteConfig,
+  attachment: ReceiptAttachment,
+): Promise<ReceiptEmailResult> {
   const to = String(order.customerEmail || '').trim();
   if (!to || !isValidEmail(to)) return { sent: false, reason: 'no_email' };
   if (!isMailConfigured()) return { sent: false, reason: 'not_configured' };
@@ -144,6 +156,7 @@ export async function sendReceiptEmail(order: OrderRecord, config: SiteConfig): 
       subject,
       html,
       text,
+      attachments: [attachment],
     });
     return { sent: true, to };
   } catch (err) {

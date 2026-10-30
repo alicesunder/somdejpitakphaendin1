@@ -671,7 +671,7 @@ export default function App() {
           )}
 
           {currentView === 'tracking' && (
-            <OrderTrackingView initialOrderNumber={trackingOrderNumber} paymentChannels={siteConfig.paymentChannels} siteConfig={siteConfig} />
+            <OrderTrackingView initialOrderNumber={trackingOrderNumber} paymentChannels={siteConfig.paymentChannels} />
           )}
 
           {currentView === 'about' && (

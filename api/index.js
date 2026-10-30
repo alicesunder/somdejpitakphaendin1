@@ -1150,6 +1150,7 @@ function maskCustomerPII(order) {
     slipUploadedAt: order.slipUploadedAt,
     slipTransferAmount: order.slipTransferAmount,
     slipTransferTime: order.slipTransferTime,
+    receiptEmailedAt: order.receiptEmailedAt,
     items: order.items,
     selectedNumbers: order.selectedNumbers,
     subtotal: order.subtotal,
@@ -1680,7 +1681,7 @@ function buildReceiptEmail(order, config) {
     <p style="margin:0 0 16px;font-size:13px;color:#5A5244">\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48\u0E43\u0E1A\u0E08\u0E2D\u0E07 <b style="color:#18140E">${esc(order.orderNumber)}</b> \xB7 \u0E27\u0E31\u0E19\u0E17\u0E35\u0E48\u0E08\u0E2D\u0E07 ${esc(date)}</p>
 
     <div style="background:#E8F5E9;border:1px solid #81C784;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:16px">
-      \u2705 \u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E23\u0E49\u0E2D\u0E22\u0E41\u0E25\u0E49\u0E27 \u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E2B\u0E25\u0E31\u0E01\u0E10\u0E32\u0E19\u0E01\u0E32\u0E23\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07\u0E44\u0E14\u0E49
+      \u{1F4CE} \u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E25\u0E07\u0E19\u0E32\u0E21\u0E42\u0E14\u0E22\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E41\u0E19\u0E1A\u0E21\u0E32\u0E01\u0E31\u0E1A\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E01\u0E47\u0E1A\u0E44\u0E27\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E2B\u0E25\u0E31\u0E01\u0E10\u0E32\u0E19\u0E01\u0E32\u0E23\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07
     </div>
 
     <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:12px">
@@ -1714,7 +1715,7 @@ function buildReceiptEmail(order, config) {
   const text = [
     subject,
     `\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48\u0E08\u0E2D\u0E07 ${date}`,
-    "\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E23\u0E49\u0E2D\u0E22\u0E41\u0E25\u0E49\u0E27",
+    "\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E25\u0E07\u0E19\u0E32\u0E21\u0E42\u0E14\u0E22\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E41\u0E19\u0E1A\u0E21\u0E32\u0E01\u0E31\u0E1A\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E19\u0E35\u0E49",
     "",
     `\u0E0A\u0E37\u0E48\u0E2D\u0E1C\u0E39\u0E49\u0E08\u0E2D\u0E07: ${order.customerName}`,
     `\u0E2B\u0E19\u0E48\u0E27\u0E22\u0E07\u0E32\u0E19: ${order.organization || "\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19\u0E17\u0E31\u0E48\u0E27\u0E44\u0E1B"}`,
@@ -1731,7 +1732,7 @@ function buildReceiptEmail(order, config) {
   ].filter((l) => l !== "").join("\n");
   return { subject, html, text };
 }
-async function sendReceiptEmail(order, config) {
+async function sendReceiptEmail(order, config, attachment) {
   const to = String(order.customerEmail || "").trim();
   if (!to || !isValidEmail(to)) return { sent: false, reason: "no_email" };
   if (!isMailConfigured()) return { sent: false, reason: "not_configured" };
@@ -1742,7 +1743,8 @@ async function sendReceiptEmail(order, config) {
       to,
       subject,
       html,
-      text
+      text,
+      attachments: [attachment]
     });
     return { sent: true, to };
   } catch (err) {
@@ -1999,6 +2001,19 @@ function releaseOrderReservations(order) {
   }
   purgeExpiredRajaSlotHolds();
 }
+var RECEIPT_MAX_BYTES = 3 * 1024 * 1024;
+function parseReceiptFile(raw) {
+  const dataUrl = typeof raw === "object" && raw ? raw.dataUrl : void 0;
+  if (typeof dataUrl !== "string") return null;
+  const m = /^data:(application\/pdf|image\/jpeg|image\/png);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!m) return null;
+  const content = Buffer.from(m[2], "base64");
+  if (content.length === 0 || content.length > RECEIPT_MAX_BYTES) return null;
+  const ok = m[1] === "application/pdf" && content.subarray(0, 5).toString("ascii") === "%PDF-" || m[1] === "image/jpeg" && content[0] === 255 && content[1] === 216 || m[1] === "image/png" && content[0] === 137 && content.subarray(1, 4).toString("ascii") === "PNG";
+  if (!ok) return null;
+  const ext = m[1] === "application/pdf" ? "pdf" : m[1] === "image/png" ? "png" : "jpg";
+  return { content, contentType: m[1], ext };
+}
 function applyBookingEffects(calc, orderNumber, sessionId, nowIso) {
   for (const num of calc.selectedNumbers) {
     const slot = store.rajaSlots.find((s) => s.slotNumber === num);
@@ -2026,6 +2041,7 @@ function applyBookingEffects(calc, orderNumber, sessionId, nowIso) {
 function createApp() {
   const app2 = express();
   app2.disable("x-powered-by");
+  app2.use("/api/admin/orders", express.json({ limit: "4.5mb" }));
   app2.use(express.json({ limit: "2mb" }));
   app2.use("/api", (_req, res, next) => {
     res.set({
@@ -2792,7 +2808,7 @@ function createApp() {
       res.status(500).json({ error: "\u0E40\u0E1B\u0E34\u0E14\u0E2A\u0E25\u0E34\u0E1B\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08" });
     }
   });
-  app2.patch("/api/admin/orders/:id/status", requireAdmin, async (req, res) => {
+  app2.patch("/api/admin/orders/:id/status", requireAdmin, (req, res) => {
     const order = store.orders.find((o) => o.id === req.params.id);
     if (!order) {
       res.status(404).json({ error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07" });
@@ -2834,16 +2850,8 @@ function createApp() {
       shippingStatus: order.shippingStatus,
       note: String(note || "").trim() || `\u0E1B\u0E23\u0E31\u0E1A\u0E1B\u0E23\u0E38\u0E07\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E43\u0E1A\u0E08\u0E2D\u0E07${order.trackingNumber ? ` (\u0E40\u0E25\u0E02\u0E1E\u0E31\u0E2A\u0E14\u0E38: ${order.trackingNumber})` : ""}`
     });
-    let receiptEmail = null;
-    if (previousPaymentStatus !== "verified_paid" && order.paymentStatus === "verified_paid") {
-      receiptEmail = await sendReceiptEmail(order, store.siteConfig);
-      if (receiptEmail.sent) {
-        order.receiptEmailedAt = (/* @__PURE__ */ new Date()).toISOString();
-        order.statusHistory[0].note += ` \xB7 \u0E2A\u0E48\u0E07\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E17\u0E32\u0E07\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E41\u0E25\u0E49\u0E27 (${receiptEmail.to})`;
-      }
-    }
     saveStore(store);
-    res.json({ order, rajaSlots: enrichRajaSlotsForAdmin(), receiptEmail });
+    res.json({ order, rajaSlots: enrichRajaSlotsForAdmin() });
   });
   app2.delete("/api/admin/orders/:id", requireAdmin, async (req, res) => {
     const idx = store.orders.findIndex((o) => o.id === req.params.id);
@@ -2872,10 +2880,41 @@ function createApp() {
       res.status(409).json({ error: "\u0E2A\u0E48\u0E07\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E44\u0E14\u0E49\u0E2B\u0E25\u0E31\u0E07\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E49\u0E27\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19" });
       return;
     }
+    const file = parseReceiptFile(req.body?.file);
+    if (!file) {
+      res.status(400).json({ error: "\u0E01\u0E23\u0E38\u0E13\u0E32\u0E41\u0E19\u0E1A\u0E44\u0E1F\u0E25\u0E4C\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E25\u0E07\u0E19\u0E32\u0E21\u0E41\u0E25\u0E49\u0E27 (PDF, JPG \u0E2B\u0E23\u0E37\u0E2D PNG \u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 3 MB)" });
+      return;
+    }
     const email = String(req.body?.email ?? "").trim();
-    if (email) order.customerEmail = email.slice(0, 120);
-    const receiptEmail = await sendReceiptEmail(order, store.siteConfig);
-    if (receiptEmail.sent) order.receiptEmailedAt = (/* @__PURE__ */ new Date()).toISOString();
+    if (!isValidEmail(email)) {
+      res.status(400).json({ error: "\u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E30\u0E1A\u0E38\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E1C\u0E39\u0E49\u0E0B\u0E37\u0E49\u0E2D\u0E43\u0E2B\u0E49\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07" });
+      return;
+    }
+    if (!isMailConfigured()) {
+      res.status(503).json({ error: "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E1C\u0E39\u0E49\u0E2A\u0E48\u0E07 (SMTP) \u0E08\u0E36\u0E07\u0E2A\u0E48\u0E07\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49" });
+      return;
+    }
+    order.customerEmail = email.slice(0, 120);
+    const receiptEmail = await sendReceiptEmail(order, store.siteConfig, {
+      filename: `\u0E43\u0E1A\u0E08\u0E2D\u0E07-${order.orderNumber}.${file.ext}`,
+      content: file.content,
+      contentType: file.contentType
+    });
+    if (!receiptEmail.sent) {
+      res.status(502).json({ error: "\u0E2A\u0E48\u0E07\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E25\u0E2D\u0E07\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07", receiptEmail });
+      return;
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    order.receiptEmailedAt = nowIso;
+    order.statusHistory.unshift({
+      id: `log-${Date.now()}`,
+      timestamp: nowIso,
+      actor: "\u0E1C\u0E39\u0E49\u0E14\u0E39\u0E41\u0E25\u0E04\u0E25\u0E31\u0E07\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25 (Admin)",
+      paymentStatus: order.paymentStatus,
+      preparationStatus: order.preparationStatus,
+      shippingStatus: order.shippingStatus,
+      note: "\u0E2A\u0E48\u0E07\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E25\u0E07\u0E19\u0E32\u0E21\u0E42\u0E14\u0E22\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E44\u0E1B\u0E17\u0E32\u0E07\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E41\u0E25\u0E49\u0E27"
+    });
     saveStore(store);
     res.json({ order, receiptEmail });
   });
