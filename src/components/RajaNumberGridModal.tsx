@@ -92,7 +92,7 @@ export const RajaNumberGridModal: React.FC<RajaNumberGridProps> = ({
     let mine = 0;
 
     for (const s of slotStates) {
-      if (s.effectiveStatus === 'booked') booked++;
+      if (s.effectiveStatus === 'booked' || s.effectiveStatus === 'locked') booked++;
       else if (s.isSelectedByMe) mine++;
       else if (s.effectiveStatus === 'held_by_other') heldByOther++;
       else available++;
@@ -113,6 +113,7 @@ export const RajaNumberGridModal: React.FC<RajaNumberGridProps> = ({
       return slotStates.filter(
         (s) =>
           s.effectiveStatus === 'booked' ||
+          s.effectiveStatus === 'locked' ||
           s.effectiveStatus === 'held_by_other'
       );
     }
@@ -249,10 +250,11 @@ export const RajaNumberGridModal: React.FC<RajaNumberGridProps> = ({
       >
         {filteredSlots.map((slot) => {
           const isBooked = slot.effectiveStatus === 'booked';
+          const isLocked = slot.effectiveStatus === 'locked';
           const isHeldOther = slot.effectiveStatus === 'held_by_other';
           const isMine = slot.isSelectedByMe;
           const isLoading = busySlot === slot.slotNumber;
-          const isDisabled = isBooked || isHeldOther || isLoading;
+          const isDisabled = isBooked || isLocked || isHeldOther || isLoading;
 
           const formattedNum = String(slot.slotNumber).padStart(2, '0');
 
@@ -266,6 +268,8 @@ export const RajaNumberGridModal: React.FC<RajaNumberGridProps> = ({
               aria-label={
                 isBooked
                   ? `หมายเลข ${slot.slotNumber} ถูกจองแล้ว`
+                  : isLocked
+                  ? `หมายเลข ${slot.slotNumber} สงวนไว้ ไม่เปิดให้จอง`
                   : isHeldOther
                   ? `หมายเลข ${slot.slotNumber} กำลังมีผู้เลือก เหลือเวลา ${slot.remainingFormatted}`
                   : isMine
@@ -275,6 +279,8 @@ export const RajaNumberGridModal: React.FC<RajaNumberGridProps> = ({
               className={`relative rounded-xl p-2 sm:p-2.5 flex flex-col items-center justify-center min-h-[66px] border transition-all select-none font-tabular ${
                 isBooked
                   ? 'bg-[#1B0D0D]/90 border-red-500/45 text-red-300/75 cursor-not-allowed opacity-80'
+                  : isLocked
+                  ? 'bg-[#141414]/90 border-zinc-500/45 text-zinc-400 cursor-not-allowed opacity-80'
                   : isHeldOther
                   ? 'bg-[#24190B]/90 border-amber-500/50 text-amber-300/80 cursor-not-allowed'
                   : isMine
@@ -288,6 +294,8 @@ export const RajaNumberGridModal: React.FC<RajaNumberGridProps> = ({
                     ? 'text-[#0D0A06]'
                     : isBooked
                     ? 'text-red-300 line-through'
+                    : isLocked
+                    ? 'text-zinc-400'
                     : 'text-[#FCE694]'
                 }`}
               >
@@ -300,6 +308,8 @@ export const RajaNumberGridModal: React.FC<RajaNumberGridProps> = ({
                     ? 'text-[#0D0A06] font-bold'
                     : isBooked
                     ? 'text-red-300'
+                    : isLocked
+                    ? 'text-zinc-400'
                     : isHeldOther
                     ? 'text-amber-300'
                     : 'text-emerald-300/90'
@@ -309,6 +319,8 @@ export const RajaNumberGridModal: React.FC<RajaNumberGridProps> = ({
                   ? 'กำลังล็อก...'
                   : isBooked
                   ? 'ถูกจองแล้ว'
+                  : isLocked
+                  ? 'สงวนไว้'
                   : isHeldOther
                   ? `ล็อก ${slot.remainingFormatted}`
                   : isMine
@@ -318,8 +330,8 @@ export const RajaNumberGridModal: React.FC<RajaNumberGridProps> = ({
                   : 'ว่าง'}
               </span>
 
-              {isBooked && (
-                <Lock className="w-2.5 h-2.5 text-red-400/80 absolute top-1.5 right-1.5" />
+              {(isBooked || isLocked) && (
+                <Lock className={`w-2.5 h-2.5 absolute top-1.5 right-1.5 ${isLocked ? 'text-zinc-400' : 'text-red-400/80'}`} />
               )}
               {isMine && (
                 <CheckCircle2 className="w-3 h-3 text-[#0D0A06] absolute top-1.5 right-1.5" />

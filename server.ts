@@ -171,7 +171,8 @@ function purgeExpiredRajaSlotHolds(): boolean {
   );
   if (rajaProduct) {
     const bookedCount = store.rajaSlots.filter((s) => s.status === 'booked').length;
-    const targetStock = Math.max(0, 99 - bookedCount);
+    const lockedCount = store.rajaSlots.filter((s) => s.status === 'locked').length;
+    const targetStock = Math.max(0, 99 - bookedCount - lockedCount);
     if (rajaProduct.stock !== targetStock || rajaProduct.bookedCount !== bookedCount) {
       rajaProduct.stock = targetStock;
       rajaProduct.bookedCount = bookedCount;
@@ -362,7 +363,7 @@ function releaseOrderReservations(order: OrderRecord): void {
     if (!prod) continue;
     prod.bookedCount = Math.max(0, (prod.bookedCount || 0) - line.quantity);
     if (prod.requiresNumberSelection) {
-      const totalBookedSlots = store.rajaSlots.filter((s) => s.status === 'booked').length;
+      const totalBookedSlots = store.rajaSlots.filter((s) => s.status === 'booked' || s.status === 'locked').length;
       prod.stock = Math.max(0, 99 - totalBookedSlots);
     } else if (!prod.isMadeToOrder) {
       prod.stock += line.quantity;
@@ -412,7 +413,7 @@ function applyBookingEffects(
     if (prod) {
       prod.bookedCount = (prod.bookedCount || 0) + line.quantity;
       if (prod.requiresNumberSelection) {
-        const totalBookedSlots = store.rajaSlots.filter((s) => s.status === 'booked').length;
+        const totalBookedSlots = store.rajaSlots.filter((s) => s.status === 'booked' || s.status === 'locked').length;
         prod.stock = Math.max(0, 99 - totalBookedSlots);
       } else if (!prod.isMadeToOrder) {
         prod.stock = Math.max(0, prod.stock - line.quantity);
@@ -558,6 +559,14 @@ export function createApp() {
 
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
+
+    if (slot.status === 'locked') {
+      res.status(409).json({
+        error: `หมายเลข #${num} สงวนไว้ ไม่เปิดให้จอง กรุณาเลือกหมายเลขอื่น`,
+        rajaSlots: store.rajaSlots,
+      });
+      return;
+    }
 
     if (slot.status === 'booked') {
       res.status(409).json({
@@ -738,7 +747,7 @@ export function createApp() {
           res.status(400).json({ error: `หมายเลขชุด #${num} ไม่ถูกต้อง` });
           return;
         }
-        if (slot.status === 'booked') {
+        if (slot.status === 'booked' || slot.status === 'locked') {
           res.status(409).json({
             error: `หมายเลข #${num} ถูกจองไปแล้ว กรุณาเลือกหมายเลขอื่น`,
           });
@@ -1083,10 +1092,27 @@ export function createApp() {
         return;
       }
 
-      const { status, orderNumber } = req.body || {};
+      const { status, orderNumber, note } = req.body || {};
       const nowIso = new Date().toISOString();
 
-      if (status === 'available') {
+      if (status === 'locked') {
+        if (slot.status === 'booked') {
+          res.status(409).json({ error: `หมายเลข #${num} ถูกจองแล้ว ล็อกไม่ได้` });
+          return;
+        }
+        if (slot.status === 'held' && slot.heldUntil > Date.now()) {
+          res.status(409).json({ error: `หมายเลข #${num} มีลูกค้ากำลังเลือกอยู่ กรุณารอสักครู่แล้วลองใหม่` });
+          return;
+        }
+        slot.status = 'locked';
+        slot.sessionId = '';
+        slot.heldAt = 0;
+        slot.heldUntil = 0;
+        slot.orderNumber = '';
+        slot.lockNote = String(note || '').trim().slice(0, 80) || undefined;
+        slot.updatedAt = nowIso;
+      } else if (status === 'available') {
+        slot.lockNote = undefined;
         slot.status = 'available';
         slot.sessionId = '';
         slot.heldAt = 0;
@@ -1309,7 +1335,7 @@ export function createApp() {
       }
       if (slot.status !== 'available') {
         res.status(409).json({
-          error: `หมายเลข #${num} ${slot.status === 'booked' ? 'ถูกจองไปแล้ว' : 'กำลังถูกลูกค้าเลือกอยู่'} กรุณาเลือกหมายเลขอื่น`,
+          error: `หมายเลข #${num} ${slot.status === 'booked' ? 'ถูกจองไปแล้ว' : slot.status === 'locked' ? 'ล็อกไว้อยู่ (ปลดล็อกในตารางเลขก่อน)' : 'กำลังถูกลูกค้าเลือกอยู่'} กรุณาเลือกหมายเลขอื่น`,
         });
         return;
       }

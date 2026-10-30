@@ -1844,7 +1844,8 @@ function purgeExpiredRajaSlotHolds() {
   );
   if (rajaProduct) {
     const bookedCount = store.rajaSlots.filter((s) => s.status === "booked").length;
-    const targetStock = Math.max(0, 99 - bookedCount);
+    const lockedCount = store.rajaSlots.filter((s) => s.status === "locked").length;
+    const targetStock = Math.max(0, 99 - bookedCount - lockedCount);
     if (rajaProduct.stock !== targetStock || rajaProduct.bookedCount !== bookedCount) {
       rajaProduct.stock = targetStock;
       rajaProduct.bookedCount = bookedCount;
@@ -1993,7 +1994,7 @@ function releaseOrderReservations(order) {
     if (!prod) continue;
     prod.bookedCount = Math.max(0, (prod.bookedCount || 0) - line.quantity);
     if (prod.requiresNumberSelection) {
-      const totalBookedSlots = store.rajaSlots.filter((s) => s.status === "booked").length;
+      const totalBookedSlots = store.rajaSlots.filter((s) => s.status === "booked" || s.status === "locked").length;
       prod.stock = Math.max(0, 99 - totalBookedSlots);
     } else if (!prod.isMadeToOrder) {
       prod.stock += line.quantity;
@@ -2030,7 +2031,7 @@ function applyBookingEffects(calc, orderNumber, sessionId, nowIso) {
     if (prod) {
       prod.bookedCount = (prod.bookedCount || 0) + line.quantity;
       if (prod.requiresNumberSelection) {
-        const totalBookedSlots = store.rajaSlots.filter((s) => s.status === "booked").length;
+        const totalBookedSlots = store.rajaSlots.filter((s) => s.status === "booked" || s.status === "locked").length;
         prod.stock = Math.max(0, 99 - totalBookedSlots);
       } else if (!prod.isMadeToOrder) {
         prod.stock = Math.max(0, prod.stock - line.quantity);
@@ -2146,6 +2147,13 @@ function createApp() {
     }
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
+    if (slot.status === "locked") {
+      res.status(409).json({
+        error: `\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02 #${num} \u0E2A\u0E07\u0E27\u0E19\u0E44\u0E27\u0E49 \u0E44\u0E21\u0E48\u0E40\u0E1B\u0E34\u0E14\u0E43\u0E2B\u0E49\u0E08\u0E2D\u0E07 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E2D\u0E37\u0E48\u0E19`,
+        rajaSlots: store.rajaSlots
+      });
+      return;
+    }
     if (slot.status === "booked") {
       res.status(409).json({
         error: `\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02 #${num} \u0E16\u0E39\u0E01\u0E08\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27 \u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E0B\u0E49\u0E33\u0E44\u0E14\u0E49`,
@@ -2296,7 +2304,7 @@ function createApp() {
           res.status(400).json({ error: `\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E0A\u0E38\u0E14 #${num} \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07` });
           return;
         }
-        if (slot.status === "booked") {
+        if (slot.status === "booked" || slot.status === "locked") {
           res.status(409).json({
             error: `\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02 #${num} \u0E16\u0E39\u0E01\u0E08\u0E2D\u0E07\u0E44\u0E1B\u0E41\u0E25\u0E49\u0E27 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E2D\u0E37\u0E48\u0E19`
           });
@@ -2558,9 +2566,26 @@ function createApp() {
         res.status(404).json({ error: `\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02 #${num}` });
         return;
       }
-      const { status, orderNumber } = req.body || {};
+      const { status, orderNumber, note } = req.body || {};
       const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-      if (status === "available") {
+      if (status === "locked") {
+        if (slot.status === "booked") {
+          res.status(409).json({ error: `\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02 #${num} \u0E16\u0E39\u0E01\u0E08\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27 \u0E25\u0E47\u0E2D\u0E01\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49` });
+          return;
+        }
+        if (slot.status === "held" && slot.heldUntil > Date.now()) {
+          res.status(409).json({ error: `\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02 #${num} \u0E21\u0E35\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E01\u0E33\u0E25\u0E31\u0E07\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2D\u0E22\u0E39\u0E48 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48` });
+          return;
+        }
+        slot.status = "locked";
+        slot.sessionId = "";
+        slot.heldAt = 0;
+        slot.heldUntil = 0;
+        slot.orderNumber = "";
+        slot.lockNote = String(note || "").trim().slice(0, 80) || void 0;
+        slot.updatedAt = nowIso;
+      } else if (status === "available") {
+        slot.lockNote = void 0;
         slot.status = "available";
         slot.sessionId = "";
         slot.heldAt = 0;
@@ -2732,7 +2757,7 @@ function createApp() {
       }
       if (slot.status !== "available") {
         res.status(409).json({
-          error: `\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02 #${num} ${slot.status === "booked" ? "\u0E16\u0E39\u0E01\u0E08\u0E2D\u0E07\u0E44\u0E1B\u0E41\u0E25\u0E49\u0E27" : "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E16\u0E39\u0E01\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2D\u0E22\u0E39\u0E48"} \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E2D\u0E37\u0E48\u0E19`
+          error: `\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02 #${num} ${slot.status === "booked" ? "\u0E16\u0E39\u0E01\u0E08\u0E2D\u0E07\u0E44\u0E1B\u0E41\u0E25\u0E49\u0E27" : slot.status === "locked" ? "\u0E25\u0E47\u0E2D\u0E01\u0E44\u0E27\u0E49\u0E2D\u0E22\u0E39\u0E48 (\u0E1B\u0E25\u0E14\u0E25\u0E47\u0E2D\u0E01\u0E43\u0E19\u0E15\u0E32\u0E23\u0E32\u0E07\u0E40\u0E25\u0E02\u0E01\u0E48\u0E2D\u0E19)" : "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E16\u0E39\u0E01\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2D\u0E22\u0E39\u0E48"} \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E2D\u0E37\u0E48\u0E19`
         });
         return;
       }

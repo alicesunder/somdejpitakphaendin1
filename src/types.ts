@@ -71,7 +71,8 @@ export interface CartItem {
   selectedNumbers?: number[];
 }
 
-export type RajaSlotStatus = 'available' | 'held' | 'booked';
+/** 'locked' = kept back by staff (e.g. reserved for a guest); customers cannot pick it. */
+export type RajaSlotStatus = 'available' | 'held' | 'booked' | 'locked';
 
 export interface RajaSetSlot {
   slotNumber: number; // 1 to 99
@@ -81,6 +82,8 @@ export interface RajaSetSlot {
   heldUntil: number;
   orderNumber: string;
   updatedAt: string;
+  /** Staff note for a locked number (who it is kept for) */
+  lockNote?: string;
   // Admin / enriched display fields (derived from ReservationOrder):
   customerName?: string;
   organization?: string;

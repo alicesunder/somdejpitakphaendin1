@@ -129,7 +129,8 @@ export type EffectiveSlotDisplayStatus =
   | 'available'
   | 'selected_by_me'
   | 'held_by_other'
-  | 'booked';
+  | 'booked'
+  | 'locked';
 
 export interface EffectiveSlotState {
   slotNumber: number;
@@ -145,6 +146,17 @@ export function getEffectiveSlotState(
   currentSessionId: string,
   nowMs = Date.now()
 ): EffectiveSlotState {
+  if (slot.status === 'locked') {
+    return {
+      slotNumber: slot.slotNumber,
+      effectiveStatus: 'locked',
+      remainingMs: 0,
+      remainingFormatted: '00:00',
+      isExpiredHold: false,
+      orderNumber: '',
+    };
+  }
+
   if (slot.status === 'booked') {
     return {
       slotNumber: slot.slotNumber,
@@ -724,6 +736,8 @@ export function generateRajaSlotsCsv(
     let statusLabel = 'ว่าง';
     if (slot.status === 'booked') {
       statusLabel = 'ถูกจองแล้ว';
+    } else if (slot.status === 'locked') {
+      statusLabel = `ล็อกโดยเจ้าหน้าที่${slot.lockNote ? ` (${slot.lockNote})` : ''}`;
     } else if (slot.status === 'held' && slot.heldUntil > now) {
       statusLabel = 'กำลังเลือก (ล็อก 15 นาที)';
     }

@@ -326,6 +326,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
+  const handleLockRajaSlot = async (slotNumber: number) => {
+    if (!adminToken) return;
+    const note = window.prompt(
+      `ล็อกหมายเลข #${String(slotNumber).padStart(2, '0')} ไม่ให้ลูกค้าเลือก\nหมายเหตุ (เช่น สงวนไว้ให้ใคร) — เว้นว่างได้`,
+      '',
+    );
+    if (note === null) return;
+    const res = await fetch(`/api/admin/raja-slots/${slotNumber}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ status: 'locked', note }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      showToast((data && data.error) || 'ล็อกหมายเลขไม่สำเร็จ', 6000);
+      return;
+    }
+    await fetchDashboard(adminToken);
+    onStoreUpdated();
+    showToast(`ล็อกหมายเลข #${slotNumber} แล้ว — ลูกค้าจะเลือกเลขนี้ไม่ได้`);
+  };
+
   const handleReleaseRajaSlot = async (slotNumber: number) => {
     if (!adminToken) return;
     const res = await fetch(`/api/admin/raja-slots/${slotNumber}`, {
@@ -525,7 +547,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     const now = Date.now();
     return dashboardData.rajaSlots.filter((s) => {
       const isOccupied =
-        s.status === 'booked' || (s.status === 'held' && s.heldUntil > now);
+        s.status === 'booked' || s.status === 'locked' || (s.status === 'held' && s.heldUntil > now);
       if (slotFilter === 'booked') return isOccupied;
       if (slotFilter === 'available') return !isOccupied;
       return true;
@@ -1258,9 +1280,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           )}
                         </div>
                         <div>
-                          <label className="font-semibold block mb-1" htmlFor="receipt-email">
-                            3. อีเมลผู้ซื้อ
-                          </label>
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                            <label className="font-semibold" htmlFor="receipt-email">
+                              3. อีเมลผู้ซื้อ
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setReceiptEmail(selectedOrder.customerEmail || '')}
+                              disabled={!selectedOrder.customerEmail}
+                              className="px-2.5 py-1.5 min-h-[32px] rounded-lg border border-[#C9A45C] bg-white text-[#14100A] text-[11px] font-bold inline-flex items-center gap-1 disabled:opacity-50"
+                            >
+                              <Mail className="w-3 h-3" />
+                              {selectedOrder.customerEmail ? 'ใช้อีเมลที่ผู้ซื้อกรอกไว้' : 'ผู้ซื้อไม่ได้กรอกอีเมล'}
+                            </button>
+                          </div>
                           <input
                             id="receipt-email"
                             type="email"
@@ -1518,6 +1551,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <tbody className="divide-y divide-[#E8E2D5]">
                     {filteredRajaSlots.map((slot) => {
                       const isBooked = slot.status === 'booked';
+                      const isLocked = slot.status === 'locked';
                       const isHeld =
                         slot.status === 'held' && slot.heldUntil > Date.now();
 
@@ -1527,6 +1561,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           className={
                             isBooked
                               ? 'bg-amber-50/70'
+                              : isLocked
+                              ? 'bg-zinc-100/80'
                               : isHeld
                               ? 'bg-orange-50/60'
                               : 'hover:bg-[#F7F2E8]/40'
@@ -1540,6 +1576,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                               className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                                 isBooked
                                   ? 'bg-red-100 text-red-900 border border-red-300'
+                                  : isLocked
+                                  ? 'bg-zinc-200 text-zinc-900 border border-zinc-400'
                                   : isHeld
                                   ? 'bg-amber-100 text-amber-900 border border-amber-300'
                                   : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
@@ -1547,13 +1585,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             >
                               {isBooked
                                 ? 'ถูกจองแล้ว'
+                                : isLocked
+                                ? 'ล็อกโดยเจ้าหน้าที่'
                                 : isHeld
                                 ? 'กำลังเลือก (ล็อก 15 นาที)'
                                 : 'ว่าง'}
                             </span>
                           </td>
                           <td className="p-3 font-tabular font-semibold text-[#14100A]">
-                            {slot.orderNumber || '-'}
+                            {isLocked ? <span className="font-sans font-normal text-[#5A5244]">{slot.lockNote || 'สงวนไว้'}</span> : slot.orderNumber || '-'}
                           </td>
                           <td className="p-3 font-bold text-[#14100A]">
                             {slot.customerName || '-'}
@@ -1578,7 +1618,27 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                               '-'
                             )}
                           </td>
-                          <td className="p-3 text-right">
+                          <td className="p-3 text-right space-x-1.5">
+                            {!isBooked && !isLocked && !isHeld && (
+                              <button
+                                type="button"
+                                onClick={() => handleLockRajaSlot(slot.slotNumber)}
+                                className="px-2.5 py-1 rounded bg-zinc-50 border border-zinc-400 text-zinc-800 text-[11px] font-semibold hover:bg-zinc-100 inline-flex items-center gap-1"
+                              >
+                                <Lock className="w-3 h-3" />
+                                <span>ล็อกเลข</span>
+                              </button>
+                            )}
+                            {isLocked && (
+                              <button
+                                type="button"
+                                onClick={() => handleReleaseRajaSlot(slot.slotNumber)}
+                                className="px-2.5 py-1 rounded bg-emerald-50 border border-emerald-400 text-emerald-800 text-[11px] font-semibold hover:bg-emerald-100 inline-flex items-center gap-1"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>ปลดล็อก</span>
+                              </button>
+                            )}
                             {(isBooked || isHeld) && (
                               <button
                                 type="button"
