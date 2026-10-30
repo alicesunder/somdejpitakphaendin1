@@ -37,6 +37,7 @@ import {
 } from './server/firestoreStore';
 import { createPostgresStore, isPostgresConfigured } from './server/postgresStore';
 import { HitFn, memoryHit, rateLimiter } from './server/rateLimit';
+import { isVisitorId, memoryVisits, type VisitStore } from './server/visits';
 import { BOOKING_CLOSED_MESSAGE, SALES_PAUSED_MESSAGE, isBookingOpen } from './src/config/booking';
 import { isMailConfigured, isValidEmail, sendReceiptEmail } from './server/mailer';
 
@@ -66,6 +67,8 @@ const remoteStore = postgresStore ?? legacyFirestore;
 const useRemoteStore = remoteStore !== null;
 // Rate-limit counters are shared through Postgres; without it each instance counts on its own.
 const rateLimitHit: HitFn = postgresStore ? postgresStore.hit : memoryHit();
+// Visitor counts for the admin dashboard (Postgres, or in memory for local development).
+const visitStore: VisitStore = postgresStore ? postgresStore.visits : memoryVisits();
 
 const DATA_DIR = path.resolve(process.cwd(), '.data');
 const DATA_FILE = path.join(DATA_DIR, 'heritage_store_v6.json');
@@ -453,7 +456,8 @@ export function createApp() {
     prev.then(async () => {
       try {
         // Login only checks the env-var passcode, so it doesn't need the database.
-        if (req.path === '/admin/login') {
+        // Login and the visit counter don't use the store, so they skip loading it.
+        if (req.path === '/admin/login' || req.path === '/visit' || req.path === '/admin/visits') {
           next();
           return;
         }
@@ -1036,6 +1040,30 @@ export function createApp() {
   });
 
   // 7. Protected Admin Dashboard Overview & Data
+  // Visitor counter: one anonymous page load from the storefront.
+  app.post('/api/visit', async (req, res) => {
+    const vid = req.body?.vid;
+    if (!isVisitorId(vid)) {
+      res.status(400).json({ error: 'invalid visitor id' });
+      return;
+    }
+    try {
+      await visitStore.record(vid);
+    } catch (err) {
+      console.warn('[visits] record failed:', (err as Error).message);
+    }
+    res.status(204).end();
+  });
+
+  app.get('/api/admin/visits', requireAdmin, async (_req, res) => {
+    try {
+      res.json(await visitStore.stats());
+    } catch (err) {
+      console.error('[visits] stats failed:', err);
+      res.status(500).json({ error: 'โหลดสถิติผู้เข้าชมไม่สำเร็จ' });
+    }
+  });
+
   app.get('/api/admin/dashboard', requireAdmin, (_req, res) => {
     const enrichedSlots = enrichRajaSlotsForAdmin();
     const totalOrders = store.orders.length;

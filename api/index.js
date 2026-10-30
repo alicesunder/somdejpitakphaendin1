@@ -1336,6 +1336,48 @@ function createFirestoreStore(seed) {
 
 // server/postgresStore.ts
 import pg from "pg";
+
+// server/visits.ts
+var isVisitorId = (v) => typeof v === "string" && /^[A-Za-z0-9-]{8,64}$/.test(v);
+var bangkokDay = (d = /* @__PURE__ */ new Date()) => new Date(d.getTime() + 7 * 36e5).toISOString().slice(0, 10);
+function lastDays(rows, count = 14, today = bangkokDay()) {
+  const byDay = new Map(rows.map((r) => [r.day, r]));
+  const out = [];
+  const end = (/* @__PURE__ */ new Date(`${today}T00:00:00Z`)).getTime();
+  for (let i = count - 1; i >= 0; i--) {
+    const day = new Date(end - i * 864e5).toISOString().slice(0, 10);
+    out.push(byDay.get(day) ?? { day, visitors: 0, views: 0 });
+  }
+  return out;
+}
+function memoryVisits() {
+  const days = /* @__PURE__ */ new Map();
+  return {
+    async record(vid) {
+      const day = bangkokDay();
+      const m = days.get(day) ?? /* @__PURE__ */ new Map();
+      m.set(vid, (m.get(vid) ?? 0) + 1);
+      days.set(day, m);
+    },
+    async stats() {
+      const rows = [...days].map(([day, m]) => ({
+        day,
+        visitors: m.size,
+        views: [...m.values()].reduce((a, b) => a + b, 0)
+      }));
+      const all = /* @__PURE__ */ new Set();
+      days.forEach((m) => m.forEach((_v, vid) => all.add(vid)));
+      const today = rows.find((r) => r.day === bangkokDay());
+      return {
+        today: { visitors: today?.visitors ?? 0, views: today?.views ?? 0 },
+        total: { visitors: all.size, views: rows.reduce((a, r) => a + r.views, 0) },
+        days: lastDays(rows)
+      };
+    }
+  };
+}
+
+// server/postgresStore.ts
 var DOCS2 = ["siteConfig", "products", "rajaSlots", "news"];
 var COLS2 = ["orders", "inquiries"];
 var ConflictError2 = class extends Error {
@@ -1534,7 +1576,36 @@ function createPostgresStore(seed, importLegacy) {
     }
     return rows[0].count;
   }
-  return { load, persist, saveSlip, getSlip, deleteSlip, hit };
+  const BKK_DAY = "(now() at time zone 'Asia/Bangkok')::date";
+  const visits = {
+    async record(vid) {
+      await getPool().query(
+        `insert into bpp.visits (day, vid) values (${BKK_DAY}, $1)
+         on conflict (day, vid) do update set views = bpp.visits.views + 1`,
+        [vid]
+      );
+    },
+    async stats() {
+      const p = getPool();
+      const [sum] = (await p.query(
+        `select
+             (select count(*) from bpp.visits where day = ${BKK_DAY})::int as today_visitors,
+             (select coalesce(sum(views), 0) from bpp.visits where day = ${BKK_DAY})::int as today_views,
+             (select count(distinct vid) from bpp.visits)::int as total_visitors,
+             (select coalesce(sum(views), 0) from bpp.visits)::int as total_views`
+      )).rows;
+      const days = (await p.query(
+        `select to_char(day, 'YYYY-MM-DD') as day, count(*)::int as visitors, sum(views)::int as views
+           from bpp.visits where day > ${BKK_DAY} - 14 group by day`
+      )).rows;
+      return {
+        today: { visitors: sum.today_visitors, views: sum.today_views },
+        total: { visitors: sum.total_visitors, views: sum.total_views },
+        days: lastDays(days)
+      };
+    }
+  };
+  return { load, persist, saveSlip, getSlip, deleteSlip, hit, visits };
 }
 
 // server/rateLimit.ts
@@ -1585,7 +1656,9 @@ var RULES = [
   },
   { method: "POST", path: "/orders", perIp: 30, windowSec: 10 * 60 },
   { method: "POST", path: "/raja-slots/toggle", perIp: 120, windowSec: 10 * 60 },
-  { method: "POST", path: "/inquiries", perIp: 5, windowSec: 10 * 60 }
+  { method: "POST", path: "/inquiries", perIp: 5, windowSec: 10 * 60 },
+  // Visit counter: generous (shared mobile IPs), but stops one script from inflating the numbers.
+  { method: "POST", path: "/visit", perIp: 60, windowSec: 10 * 60 }
 ];
 function rateLimiter(getHit) {
   return async (req, res, next) => {
@@ -1765,6 +1838,7 @@ var postgresStore = isPostgresConfigured() ? createPostgresStore(seedStore, lega
 var remoteStore = postgresStore ?? legacyFirestore;
 var useRemoteStore = remoteStore !== null;
 var rateLimitHit = postgresStore ? postgresStore.hit : memoryHit();
+var visitStore = postgresStore ? postgresStore.visits : memoryVisits();
 var DATA_DIR = path.resolve(process.cwd(), ".data");
 var DATA_FILE = path.join(DATA_DIR, "heritage_store_v6.json");
 function loadStore() {
@@ -2061,7 +2135,7 @@ function createApp() {
     res.on("close", release);
     prev.then(async () => {
       try {
-        if (req.path === "/admin/login") {
+        if (req.path === "/admin/login" || req.path === "/visit" || req.path === "/admin/visits") {
           next();
           return;
         }
@@ -2521,6 +2595,27 @@ function createApp() {
   });
   app2.post("/api/admin/logout", requireAdmin, (req, res) => {
     res.json({ success: true });
+  });
+  app2.post("/api/visit", async (req, res) => {
+    const vid = req.body?.vid;
+    if (!isVisitorId(vid)) {
+      res.status(400).json({ error: "invalid visitor id" });
+      return;
+    }
+    try {
+      await visitStore.record(vid);
+    } catch (err) {
+      console.warn("[visits] record failed:", err.message);
+    }
+    res.status(204).end();
+  });
+  app2.get("/api/admin/visits", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await visitStore.stats());
+    } catch (err) {
+      console.error("[visits] stats failed:", err);
+      res.status(500).json({ error: "\u0E42\u0E2B\u0E25\u0E14\u0E2A\u0E16\u0E34\u0E15\u0E34\u0E1C\u0E39\u0E49\u0E40\u0E02\u0E49\u0E32\u0E0A\u0E21\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08" });
+    }
   });
   app2.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
     const enrichedSlots = enrichRajaSlotsForAdmin();

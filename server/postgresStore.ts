@@ -1,5 +1,6 @@
 import pg from 'pg';
 import type { ColName } from './firestoreStore';
+import { lastDays, type VisitStore } from './visits';
 
 /**
  * Postgres (Supabase) persistence for the storefront — same contract as the Firestore store.
@@ -254,5 +255,39 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
     return rows[0].count;
   }
 
-  return { load, persist, saveSlip, getSlip, deleteSlip, hit };
+  const BKK_DAY = "(now() at time zone 'Asia/Bangkok')::date";
+  const visits: VisitStore = {
+    async record(vid) {
+      await getPool().query(
+        `insert into bpp.visits (day, vid) values (${BKK_DAY}, $1)
+         on conflict (day, vid) do update set views = bpp.visits.views + 1`,
+        [vid],
+      );
+    },
+    async stats() {
+      const p = getPool();
+      const [sum] = (
+        await p.query(
+          `select
+             (select count(*) from bpp.visits where day = ${BKK_DAY})::int as today_visitors,
+             (select coalesce(sum(views), 0) from bpp.visits where day = ${BKK_DAY})::int as today_views,
+             (select count(distinct vid) from bpp.visits)::int as total_visitors,
+             (select coalesce(sum(views), 0) from bpp.visits)::int as total_views`,
+        )
+      ).rows;
+      const days = (
+        await p.query(
+          `select to_char(day, 'YYYY-MM-DD') as day, count(*)::int as visitors, sum(views)::int as views
+           from bpp.visits where day > ${BKK_DAY} - 14 group by day`,
+        )
+      ).rows;
+      return {
+        today: { visitors: sum.today_visitors, views: sum.today_views },
+        total: { visitors: sum.total_visitors, views: sum.total_views },
+        days: lastDays(days),
+      };
+    },
+  };
+
+  return { load, persist, saveSlip, getSlip, deleteSlip, hit, visits };
 }

@@ -2,6 +2,7 @@ import { AdminNewOrderModal } from './AdminNewOrderModal';
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ReservationCertificate } from './ReservationCertificate';
+import { VisitStatsCard } from './VisitStatsCard';
 import { compressSlipImage } from '../utils/slipImage';
 import {
   CheckCircle2,
@@ -768,6 +769,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
         </div>
       )}
+
+      {dashboardData && adminToken && <VisitStatsCard adminToken={adminToken} />}
 
       {/* Summary KPI Cards */}
       {dashboardData && (

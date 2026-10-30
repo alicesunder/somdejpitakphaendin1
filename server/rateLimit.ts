@@ -73,6 +73,8 @@ const RULES: Rule[] = [
   { method: 'POST', path: '/orders', perIp: 30, windowSec: 10 * 60 },
   { method: 'POST', path: '/raja-slots/toggle', perIp: 120, windowSec: 10 * 60 },
   { method: 'POST', path: '/inquiries', perIp: 5, windowSec: 10 * 60 },
+  // Visit counter: generous (shared mobile IPs), but stops one script from inflating the numbers.
+  { method: 'POST', path: '/visit', perIp: 60, windowSec: 10 * 60 },
 ];
 
 /** Mounted on `/api` before the request queue, so refused requests never touch the store. */

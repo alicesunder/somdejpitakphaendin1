@@ -288,6 +288,27 @@ export default function App() {
     [cart]
   );
 
+  // Count this visit once per page load (anonymous random id kept in this browser; staff pages are skipped).
+  useEffect(() => {
+    if (window.location.hash === '#admin' || navigator.webdriver) return;
+    let vid = '';
+    try {
+      vid = localStorage.getItem('bpp_vid') || '';
+      if (!/^[A-Za-z0-9-]{8,64}$/.test(vid)) {
+        vid = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `v-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem('bpp_vid', vid);
+      }
+    } catch {
+      vid = `v-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+    fetch('/api/visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vid }),
+      keepalive: true,
+    }).catch(() => {});
+  }, []);
+
   // The receipt email links to /?track=<order number> to open the tracking page directly.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
