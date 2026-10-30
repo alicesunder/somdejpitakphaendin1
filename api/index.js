@@ -1304,6 +1304,9 @@ function createFirestoreStore(seed) {
   async function saveSlip(orderId, rec) {
     await getDb().collection("slips").doc(orderId).set(rec);
   }
+  async function deleteSlip(orderId) {
+    await getDb().collection("slips").doc(orderId).delete();
+  }
   async function getSlip(orderId) {
     const snap = await getDb().collection("slips").doc(orderId).get();
     return snap.exists ? snap.data() : null;
@@ -1327,7 +1330,7 @@ function createFirestoreStore(seed) {
       slips: slips.docs.map((x) => ({ orderId: x.id, data: x.data() }))
     };
   }
-  return { load, persist, saveSlip, getSlip, exportAll };
+  return { load, persist, saveSlip, getSlip, deleteSlip, exportAll };
 }
 
 // server/postgresStore.ts
@@ -1507,6 +1510,9 @@ function createPostgresStore(seed, importLegacy) {
       [orderId, json(rec)]
     );
   }
+  async function deleteSlip(orderId) {
+    await getPool().query("delete from bpp.slips where order_id = $1", [orderId]);
+  }
   async function getSlip(orderId) {
     const rows = (await getPool().query("select data from bpp.slips where order_id = $1", [orderId])).rows;
     return rows.length ? rows[0].data : null;
@@ -1527,7 +1533,7 @@ function createPostgresStore(seed, importLegacy) {
     }
     return rows[0].count;
   }
-  return { load, persist, saveSlip, getSlip, hit };
+  return { load, persist, saveSlip, getSlip, deleteSlip, hit };
 }
 
 // server/rateLimit.ts
@@ -1942,6 +1948,13 @@ async function writeSlip(rec) {
   fs.mkdirSync(SLIP_DIR, { recursive: true });
   fs.writeFileSync(slipFile(rec.orderId), JSON.stringify(rec), "utf-8");
 }
+async function removeSlip(orderId) {
+  if (remoteStore) {
+    await remoteStore.deleteSlip(orderId);
+    return;
+  }
+  fs.rmSync(slipFile(orderId), { force: true });
+}
 async function readSlip(orderId) {
   if (remoteStore) return await remoteStore.getSlip(orderId);
   try {
@@ -1959,6 +1972,32 @@ function parseSlipDataUrl(raw) {
   const head = Buffer.from(m[2].slice(0, 24), "base64");
   const ok = m[1] === "jpeg" && head[0] === 255 && head[1] === 216 || m[1] === "png" && head[0] === 137 && head[1] === 80 && head[2] === 78 && head[3] === 71 || m[1] === "webp" && head.subarray(0, 4).toString("ascii") === "RIFF" && head.subarray(8, 12).toString("ascii") === "WEBP";
   return ok ? raw : null;
+}
+function releaseOrderReservations(order) {
+  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  for (const num of order.selectedNumbers || []) {
+    const slot = store.rajaSlots.find((s) => s.slotNumber === num);
+    if (slot && slot.orderNumber === order.orderNumber) {
+      slot.status = "available";
+      slot.sessionId = "";
+      slot.heldAt = 0;
+      slot.heldUntil = 0;
+      slot.orderNumber = "";
+      slot.updatedAt = nowIso;
+    }
+  }
+  for (const line of order.items) {
+    const prod = store.products.find((p) => p.id === line.productId);
+    if (!prod) continue;
+    prod.bookedCount = Math.max(0, (prod.bookedCount || 0) - line.quantity);
+    if (prod.requiresNumberSelection) {
+      const totalBookedSlots = store.rajaSlots.filter((s) => s.status === "booked").length;
+      prod.stock = Math.max(0, 99 - totalBookedSlots);
+    } else if (!prod.isMadeToOrder) {
+      prod.stock += line.quantity;
+    }
+  }
+  purgeExpiredRajaSlotHolds();
 }
 function applyBookingEffects(calc, orderNumber, sessionId, nowIso) {
   for (const num of calc.selectedNumbers) {
@@ -2784,30 +2823,7 @@ function createApp() {
       order.carrierName = String(carrierName).trim() || void 0;
     }
     if (previousPaymentStatus !== "payment_rejected" && order.paymentStatus === "payment_rejected") {
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-      if (Array.isArray(order.selectedNumbers)) {
-        for (const num of order.selectedNumbers) {
-          const slot = store.rajaSlots.find((s) => s.slotNumber === num);
-          if (slot && slot.orderNumber === order.orderNumber) {
-            slot.status = "available";
-            slot.sessionId = "";
-            slot.heldAt = 0;
-            slot.heldUntil = 0;
-            slot.orderNumber = "";
-            slot.updatedAt = nowIso;
-          }
-        }
-      }
-      for (const line of order.items) {
-        const prod = store.products.find((p) => p.id === line.productId);
-        if (prod) {
-          prod.bookedCount = Math.max(0, (prod.bookedCount || 0) - line.quantity);
-          if (!prod.isMadeToOrder && !prod.requiresNumberSelection) {
-            prod.stock += line.quantity;
-          }
-        }
-      }
-      purgeExpiredRajaSlotHolds();
+      releaseOrderReservations(order);
     }
     order.statusHistory.unshift({
       id: `log-${Date.now()}`,
@@ -2828,6 +2844,23 @@ function createApp() {
     }
     saveStore(store);
     res.json({ order, rajaSlots: enrichRajaSlotsForAdmin(), receiptEmail });
+  });
+  app2.delete("/api/admin/orders/:id", requireAdmin, async (req, res) => {
+    const idx = store.orders.findIndex((o) => o.id === req.params.id);
+    if (idx < 0) {
+      res.status(404).json({ error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07" });
+      return;
+    }
+    const order = store.orders[idx];
+    if (order.paymentStatus !== "payment_rejected") releaseOrderReservations(order);
+    store.orders.splice(idx, 1);
+    try {
+      await removeSlip(order.id);
+    } catch (err) {
+      console.warn("Slip delete failed:", err.message);
+    }
+    saveStore(store);
+    res.json({ deleted: order.orderNumber, rajaSlots: enrichRajaSlotsForAdmin() });
   });
   app2.post("/api/admin/orders/:id/send-receipt", requireAdmin, async (req, res) => {
     const order = store.orders.find((o) => o.id === req.params.id);

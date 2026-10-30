@@ -310,6 +310,14 @@ async function writeSlip(rec: SlipRecord): Promise<void> {
   fs.writeFileSync(slipFile(rec.orderId), JSON.stringify(rec), 'utf-8');
 }
 
+async function removeSlip(orderId: string): Promise<void> {
+  if (remoteStore) {
+    await remoteStore.deleteSlip(orderId);
+    return;
+  }
+  fs.rmSync(slipFile(orderId), { force: true });
+}
+
 async function readSlip(orderId: string): Promise<SlipRecord | null> {
   if (remoteStore) return (await remoteStore.getSlip(orderId)) as SlipRecord | null;
   try {
@@ -333,6 +341,34 @@ function parseSlipDataUrl(raw: unknown): string | null {
     (m[1] === 'png' && head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) ||
     (m[1] === 'webp' && head.subarray(0, 4).toString('ascii') === 'RIFF' && head.subarray(8, 12).toString('ascii') === 'WEBP');
   return ok ? raw : null;
+}
+
+/** Undoes applyBookingEffects for a cancelled or deleted order: frees its numbers and stock. */
+function releaseOrderReservations(order: OrderRecord): void {
+  const nowIso = new Date().toISOString();
+  for (const num of order.selectedNumbers || []) {
+    const slot = store.rajaSlots.find((s) => s.slotNumber === num);
+    if (slot && slot.orderNumber === order.orderNumber) {
+      slot.status = 'available';
+      slot.sessionId = '';
+      slot.heldAt = 0;
+      slot.heldUntil = 0;
+      slot.orderNumber = '';
+      slot.updatedAt = nowIso;
+    }
+  }
+  for (const line of order.items) {
+    const prod = store.products.find((p) => p.id === line.productId);
+    if (!prod) continue;
+    prod.bookedCount = Math.max(0, (prod.bookedCount || 0) - line.quantity);
+    if (prod.requiresNumberSelection) {
+      const totalBookedSlots = store.rajaSlots.filter((s) => s.status === 'booked').length;
+      prod.stock = Math.max(0, 99 - totalBookedSlots);
+    } else if (!prod.isMadeToOrder) {
+      prod.stock += line.quantity;
+    }
+  }
+  purgeExpiredRajaSlotHolds();
 }
 
 /** Locks the chosen 1–99 numbers as booked and moves stock / booked counters for a new order. */
@@ -1375,30 +1411,7 @@ export function createApp() {
       previousPaymentStatus !== 'payment_rejected' &&
       order.paymentStatus === 'payment_rejected'
     ) {
-      const nowIso = new Date().toISOString();
-      if (Array.isArray(order.selectedNumbers)) {
-        for (const num of order.selectedNumbers) {
-          const slot = store.rajaSlots.find((s) => s.slotNumber === num);
-          if (slot && slot.orderNumber === order.orderNumber) {
-            slot.status = 'available';
-            slot.sessionId = '';
-            slot.heldAt = 0;
-            slot.heldUntil = 0;
-            slot.orderNumber = '';
-            slot.updatedAt = nowIso;
-          }
-        }
-      }
-      for (const line of order.items) {
-        const prod = store.products.find((p) => p.id === line.productId);
-        if (prod) {
-          prod.bookedCount = Math.max(0, (prod.bookedCount || 0) - line.quantity);
-          if (!prod.isMadeToOrder && !prod.requiresNumberSelection) {
-            prod.stock += line.quantity;
-          }
-        }
-      }
-      purgeExpiredRajaSlotHolds();
+      releaseOrderReservations(order);
     }
 
     order.statusHistory.unshift({
@@ -1429,6 +1442,26 @@ export function createApp() {
 
     saveStore(store);
     res.json({ order, rajaSlots: enrichRajaSlotsForAdmin(), receiptEmail });
+  });
+
+  // 9a. Delete an order outright (test bookings, duplicates). Frees its numbers and stock
+  // unless it was already cancelled, and removes its slip image.
+  app.delete('/api/admin/orders/:id', requireAdmin, async (req, res) => {
+    const idx = store.orders.findIndex((o) => o.id === req.params.id);
+    if (idx < 0) {
+      res.status(404).json({ error: 'ไม่พบรายการคำสั่งจอง' });
+      return;
+    }
+    const order = store.orders[idx];
+    if (order.paymentStatus !== 'payment_rejected') releaseOrderReservations(order);
+    store.orders.splice(idx, 1);
+    try {
+      await removeSlip(order.id);
+    } catch (err) {
+      console.warn('Slip delete failed:', (err as Error).message);
+    }
+    saveStore(store);
+    res.json({ deleted: order.orderNumber, rajaSlots: enrichRajaSlotsForAdmin() });
   });
 
   // 9b. Re-send the reservation certificate by email (approved orders only)

@@ -177,6 +177,9 @@ export function createFirestoreStore(seed: () => Seed) {
   async function saveSlip(orderId: string, rec: Record<string, unknown>): Promise<void> {
     await getDb().collection('slips').doc(orderId).set(rec);
   }
+  async function deleteSlip(orderId: string): Promise<void> {
+    await getDb().collection('slips').doc(orderId).delete();
+  }
   async function getSlip(orderId: string): Promise<Record<string, any> | null> {
     const snap = await getDb().collection('slips').doc(orderId).get();
     return snap.exists ? (snap.data() as Record<string, any>) : null;
@@ -203,5 +206,5 @@ export function createFirestoreStore(seed: () => Seed) {
     };
   }
 
-  return { load, persist, saveSlip, getSlip, exportAll };
+  return { load, persist, saveSlip, getSlip, deleteSlip, exportAll };
 }

@@ -224,6 +224,9 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
       [orderId, json(rec)],
     );
   }
+  async function deleteSlip(orderId: string): Promise<void> {
+    await getPool().query('delete from bpp.slips where order_id = $1', [orderId]);
+  }
   async function getSlip(orderId: string): Promise<Record<string, any> | null> {
     const rows = (await getPool().query('select data from bpp.slips where order_id = $1', [orderId])).rows;
     return rows.length ? rows[0].data : null;
@@ -251,5 +254,5 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
     return rows[0].count;
   }
 
-  return { load, persist, saveSlip, getSlip, hit };
+  return { load, persist, saveSlip, getSlip, deleteSlip, hit };
 }

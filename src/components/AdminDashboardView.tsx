@@ -184,6 +184,41 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const handleDeleteOrder = async () => {
+    if (!adminToken || !selectedOrder || deleteBusy) return;
+    const typed = window.prompt(
+      `ลบใบจอง ${selectedOrder.orderNumber} ออกจากระบบถาวร?\n` +
+        'ระบบจะคืนหมายเลข 1–99 และสต็อก และลบสลิปของใบจองนี้ ย้อนกลับไม่ได้\n\n' +
+        'พิมพ์เลขที่ใบจองเพื่อยืนยัน',
+    );
+    if (typed === null) return;
+    if (typed.trim().toUpperCase() !== selectedOrder.orderNumber.toUpperCase()) {
+      showToast('เลขที่ใบจองไม่ตรง จึงยังไม่ได้ลบ', 5000);
+      return;
+    }
+    setDeleteBusy(true);
+    try {
+      const res = await fetch(`/api/admin/orders/${selectedOrder.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        showToast((data && data.error) || 'ลบใบจองไม่สำเร็จ', 6000);
+        return;
+      }
+      setSelectedOrder(null);
+      await fetchDashboard(adminToken);
+      onStoreUpdated();
+      showToast(`ลบใบจอง ${selectedOrder.orderNumber} แล้ว`, 5000);
+    } catch {
+      showToast('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ', 6000);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const [receiptBusy, setReceiptBusy] = useState(false);
   const handleResendReceipt = async () => {
     if (!adminToken || !selectedOrder || receiptBusy) return;
@@ -1155,6 +1190,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         </div>
                       </div>
                     </details>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleDeleteOrder}
+                        disabled={deleteBusy}
+                        className="px-3 py-2 min-h-[40px] rounded-lg border border-red-300 bg-red-50 text-red-800 text-xs font-bold inline-flex items-center gap-1.5 hover:bg-red-100 disabled:opacity-60"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {deleteBusy ? 'กำลังลบ...' : 'ลบใบจองนี้ (เช่น ใบจองทดลอง)'}
+                      </button>
+                    </div>
 
                     {selectedOrder.paymentStatus !== 'payment_rejected' && (
                       <div className="flex flex-wrap gap-2" role="group" aria-label="ทางลัดตรวจสลิป">
