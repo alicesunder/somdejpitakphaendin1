@@ -1,7 +1,7 @@
 // Reservation window. Browsing is always open; placing reservations is blocked
-// until this moment (1 พฤศจิกายน 2569 = 1 Nov 2026, Thailand time).
-export const BOOKING_OPENS_AT = '2026-11-01T00:00:00+07:00';
-export const BOOKING_OPEN_DATE_TEXT = '1 พฤศจิกายน 2569';
+// until this moment (opened early on 30 ตุลาคม 2569 = 30 Oct 2026, Thailand time).
+export const BOOKING_OPENS_AT = '2026-10-30T00:00:00+07:00';
+export const BOOKING_OPEN_DATE_TEXT = '30 ตุลาคม 2569';
 export const BOOKING_CLOSED_MESSAGE = `ยังไม่เปิดให้จอง — เปิดให้จองวันที่ ${BOOKING_OPEN_DATE_TEXT}`;
 
 export function isBookingOpen(
