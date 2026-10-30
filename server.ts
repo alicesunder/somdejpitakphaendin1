@@ -595,11 +595,11 @@ export function createApp() {
 
   // 2. Server-side Cart Calculation Preview
   app.post('/api/cart/calculate', (req, res) => {
-    const { items } = req.body || {};
+    const { items, deliveryMethod } = req.body || {};
     const calc = calculateOrderTotals(
       Array.isArray(items) ? items : [],
       store.products,
-      store.siteConfig.standardShippingFee,
+      deliveryMethod === 'pickup_bpp' ? 0 : store.siteConfig.standardShippingFee,
       store.siteConfig.freeShippingThreshold
     );
     res.json(calc);
