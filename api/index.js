@@ -41,7 +41,7 @@ var initialSiteConfig = {
   contactHours: "\u0E40\u0E1B\u0E34\u0E14\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23\u0E17\u0E38\u0E01\u0E27\u0E31\u0E19 \u0E40\u0E27\u0E25\u0E32 08:30 \u2013 17:30 \u0E19.",
   contactEmail: "heritage@bpp-amulet.org",
   freeShippingThreshold: 0,
-  standardShippingFee: 0,
+  standardShippingFee: 70,
   paymentChannels: {
     enableBankTransfer: true,
     bankName: "\u0E1A\u0E21\u0E08.\u0E18\u0E19\u0E32\u0E04\u0E32\u0E23\u0E01\u0E23\u0E38\u0E07\u0E44\u0E17\u0E22",
@@ -1045,7 +1045,7 @@ function calculateOrderTotals(cartItems, products, standardShippingFee = 0, free
       selectedNumbers: selectedNums.length > 0 ? selectedNums : void 0
     });
   }
-  const shippingTotal = subtotal === 0 || standardShippingFee <= 0 ? 0 : subtotal >= freeShippingThreshold ? 0 : standardShippingFee;
+  const shippingTotal = subtotal === 0 || standardShippingFee <= 0 ? 0 : freeShippingThreshold > 0 && subtotal >= freeShippingThreshold ? 0 : standardShippingFee;
   const grandTotal = subtotal + shippingTotal;
   return {
     valid: errors.length === 0 && lineItems.length > 0,

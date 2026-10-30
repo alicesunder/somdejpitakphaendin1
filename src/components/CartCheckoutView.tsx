@@ -842,6 +842,11 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                             <span className="text-sm font-bold text-[#FCE694]">
                               จัดส่งทางไปรษณีย์ (EMS)
                             </span>
+                            {siteConfig.standardShippingFee > 0 && (
+                              <span className="text-xs font-bold font-tabular text-[#18140E] bg-[#FCE694] rounded-full px-2 py-0.5">
+                                +฿{siteConfig.standardShippingFee.toLocaleString()}
+                              </span>
+                            )}
                             {deliveryMethod === 'shipping' && (
                               <CheckCircle2 className="w-4 h-4 text-[#FCE694] shrink-0" />
                             )}
@@ -1147,6 +1152,14 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                           : 'จัดส่งทางไปรษณีย์ (EMS)'}
                       </span>
                     </div>
+                    {calculation.shippingTotal > 0 && (
+                      <div className="flex justify-between text-xs text-[#F7F2E8]/85">
+                        <span>ค่าจัดส่งทางไปรษณีย์:</span>
+                        <span className="font-tabular font-bold text-[#FCE694]">
+                          +฿{calculation.shippingTotal.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-xs text-[#E5C158]">
                       <span>ยอดรวมเป็นตัวเลข:</span>
                       <span className="font-tabular font-bold text-base text-[#FCE694]">

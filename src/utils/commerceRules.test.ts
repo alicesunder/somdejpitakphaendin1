@@ -229,6 +229,17 @@ test('validateCheckoutForm requires customerName, organization, and valid Thai p
   assert.equal(valid.valid, true);
 });
 
+test('postal shipping fee: threshold 0 means every postal order pays it', () => {
+  const cart = [{ productId: 'prod-chs1', quantity: 1 }];
+  const paid = calculateOrderTotals(cart, mockProducts, 70, 0);
+  assert.equal(paid.shippingTotal, 70);
+  assert.equal(paid.grandTotal, paid.subtotal + 70);
+  const pickup = calculateOrderTotals(cart, mockProducts, 0, 0);
+  assert.equal(pickup.shippingTotal, 0);
+  const freeAbove = calculateOrderTotals(cart, mockProducts, 70, 1);
+  assert.equal(freeAbove.shippingTotal, 0);
+});
+
 test('validateCheckoutForm accepts ordinary email addresses and rejects malformed ones', () => {
   const base = {
     customerName: 'ส.ต.ต. ชัยโรจน์ สหัสภูริพัฒน์',

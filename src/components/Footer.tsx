@@ -119,11 +119,17 @@ export const Footer: React.FC<FooterProps> = ({ siteConfig, onNavigate }) => {
                 <span className="font-tabular text-[#FFFFFF]">
                   {siteConfig.standardShippingFee}
                 </span>{' '}
-                บาท (จัดส่งฟรีเมื่อมียอดรวมตั้งแต่{' '}
-                <span className="font-tabular text-[#FFFFFF]">
-                  {siteConfig.freeShippingThreshold.toLocaleString()}
-                </span>{' '}
-                บาทขึ้นไป)
+                บาท
+                {siteConfig.freeShippingThreshold > 0 && (
+                  <>
+                    {' '}(จัดส่งฟรีเมื่อมียอดรวมตั้งแต่{' '}
+                    <span className="font-tabular text-[#FFFFFF]">
+                      {siteConfig.freeShippingThreshold.toLocaleString()}
+                    </span>{' '}
+                    บาทขึ้นไป)
+                  </>
+                )}
+                {' '}· มารับเองที่ บช.ตชด. ไม่มีค่าจัดส่ง
               </li>
               <li>
                 • แยกสถานะการตรวจสอบยอดชำระเงิน การคัดตรวจสภาพองค์พระ และการจัดส่งออกจากกันอย่างชัดเจน

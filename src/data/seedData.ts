@@ -114,7 +114,7 @@ export const initialSiteConfig: SiteConfig = {
   contactHours: 'เปิดบริการทุกวัน เวลา 08:30 – 17:30 น.',
   contactEmail: 'heritage@bpp-amulet.org',
   freeShippingThreshold: 0,
-  standardShippingFee: 0,
+  standardShippingFee: 70,
   paymentChannels: {
     enableBankTransfer: true,
     bankName: 'บมจ.ธนาคารกรุงไทย',

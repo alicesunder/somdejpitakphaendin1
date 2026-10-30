@@ -489,7 +489,7 @@ export const FaqContactView: React.FC<FaqContactViewProps> = ({
     },
     {
       q: 'การจัดส่งพัสดุใช้วิธีใด และมีค่าจัดส่งเท่าใด?',
-      a: `คลังวัตถุมงคลจัดส่งผ่านไปรษณีย์ด่วนพิเศษ (EMS) พร้อมบรรจุภัณฑ์กันกระแทก ค่าจัดส่งมาตรฐาน ${siteConfig.standardShippingFee} บาทต่อคำสั่งจอง และจัดส่งฟรีเมื่อมียอดรวมตั้งแต่ ${siteConfig.freeShippingThreshold.toLocaleString()} บาทขึ้นไป`,
+      a: `คลังวัตถุมงคลจัดส่งผ่านไปรษณีย์ด่วนพิเศษ (EMS) พร้อมบรรจุภัณฑ์กันกระแทก ค่าจัดส่ง ${siteConfig.standardShippingFee} บาทต่อคำสั่งจอง${siteConfig.freeShippingThreshold > 0 ? ` และจัดส่งฟรีเมื่อมียอดรวมตั้งแต่ ${siteConfig.freeShippingThreshold.toLocaleString()} บาทขึ้นไป` : ''} หรือเลือกมารับเองที่ บช.ตชด. โดยไม่มีค่าจัดส่ง`,
     },
     {
       q: 'สามารถตรวจสอบสถานะพัสดุได้อย่างไรโดยปลอดภัย?',

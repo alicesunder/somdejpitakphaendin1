@@ -385,10 +385,11 @@ export function calculateOrderTotals(
     });
   }
 
+  // A threshold of 0 means there is no free shipping: every postal order pays the fee.
   const shippingTotal =
     subtotal === 0 || standardShippingFee <= 0
       ? 0
-      : subtotal >= freeShippingThreshold
+      : freeShippingThreshold > 0 && subtotal >= freeShippingThreshold
       ? 0
       : standardShippingFee;
 
