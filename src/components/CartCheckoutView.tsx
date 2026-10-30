@@ -1,6 +1,6 @@
-import { BOOKING_CLOSED_MESSAGE } from '../config/booking';
+import { BOOKING_CLOSED_MESSAGE, SALES_PAUSED_MESSAGE, isBookingOpen } from '../config/booking';
 import { PaymentPanel } from './PaymentPanel';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Building2,
@@ -12,7 +12,6 @@ import {
   Minus,
   Package,
   Plus,
-  Printer,
   QrCode,
   Trash2,
   Truck,
@@ -30,10 +29,9 @@ import {
   calculateOrderTotals,
   formatThaiDate,
   numberToThaiBahtText,
-  resolveOrderDeliveryMethod,
   validateCheckoutForm,
 } from '../utils/commerceRules';
-import { BppCrestLogo, SpecimenPlate } from './SacredArtwork';
+import { SpecimenPlate } from './SacredArtwork';
 import { RajaNumberGridModal } from './RajaNumberGridModal';
 import LineContact from './LineContact';
 
@@ -80,14 +78,22 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
   const [customerName, setCustomerName] = useState('');
   const [organization, setOrganization] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [deliveryMethod, setDeliveryMethod] =
     useState<DeliveryMethod>('pickup_bpp');
   const [shippingAddress, setShippingAddress] = useState('');
   const [pickupNote, setPickupNote] = useState('');
   const [postalCode, setPostalCode] = useState('10400');
+  const promptPayOn = siteConfig.paymentChannels.enablePromptPay !== false;
+  const bankOn = siteConfig.paymentChannels.enableBankTransfer !== false || !promptPayOn;
   const [paymentMethod, setPaymentMethod] = useState<
     'promptpay' | 'bank_transfer'
-  >('promptpay');
+  >(() => (promptPayOn ? 'promptpay' : 'bank_transfer'));
+  // Settings arrive after the first render; never leave a switched-off channel selected.
+  useEffect(() => {
+    if (paymentMethod === 'promptpay' && !promptPayOn) setPaymentMethod('bank_transfer');
+    if (paymentMethod === 'bank_transfer' && !bankOn) setPaymentMethod('promptpay');
+  }, [paymentMethod, promptPayOn, bankOn]);
   const [selectedBank, setSelectedBank] = useState('ธนาคารกรุงไทย');
   const [showRajaModal, setShowRajaModal] = useState(false);
 
@@ -123,7 +129,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
     if (submitting) return;
 
     if (!bookingOpen) {
-      setErrorMsg(BOOKING_CLOSED_MESSAGE);
+      setErrorMsg(isBookingOpen() ? SALES_PAUSED_MESSAGE : BOOKING_CLOSED_MESSAGE);
       return;
     }
     setErrorMsg(null);
@@ -146,6 +152,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
       customerName,
       organization: cleanOrg,
       customerPhone,
+      customerEmail,
       deliveryMethod,
       shippingAddress: effectiveAddress,
       postalCode: effectivePostal,
@@ -158,7 +165,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
       setErrorMsg(
         deliveryMethod === 'shipping'
           ? 'กรุณากรอกข้อมูลผู้จอง และระบุที่อยู่จัดส่งพร้อมรหัสไปรษณีย์ 5 หลักให้ครบถ้วน'
-          : 'กรุณากรอกข้อมูลผู้จอง (ชื่อผู้จอง, หน่วยงาน, เบอร์โทรศัพท์) ให้ครบถ้วน'
+          : 'กรุณากรอกข้อมูลผู้จอง (ชื่อผู้จอง, หน่วยงาน, เบอร์โทรศัพท์, อีเมล) ให้ครบถ้วน'
       );
       return;
     }
@@ -182,6 +189,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
           customerName: customerName.trim(),
           organization: cleanOrg,
           customerPhone: customerPhone.trim(),
+          customerEmail: customerEmail.trim(),
           deliveryMethod,
           shippingAddress: effectiveAddress,
           postalCode: effectivePostal,
@@ -230,13 +238,6 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
 
   // Post-Order Printable / PDF Reservation Summary Slip
   if (confirmedOrder) {
-    const slipTotalThaiText =
-      confirmedOrder.grandTotalThaiText ||
-      numberToThaiBahtText(confirmedOrder.grandTotal);
-    const slipDateThai =
-      confirmedOrder.reservationDateThai ||
-      formatThaiDate(confirmedOrder.createdAt);
-
     return (
       <div className="bg-[#080705] text-[#F7F2E8] min-h-screen py-10 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto space-y-6">
@@ -248,24 +249,15 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
               </div>
               <div>
                 <p className="text-xs font-semibold text-emerald-300">
-                  ยืนยันการสั่งจองและล็อกสต็อก/หมายเลขเรียบร้อยแล้ว
+                  รับคำสั่งจองและล็อกสต็อก/หมายเลขเรียบร้อยแล้ว
                 </p>
                 <h1 className="font-serif-heritage text-xl sm:text-2xl font-bold text-[#FCE694]">
-                  เลขที่ใบจอง: {confirmedOrder.orderNumber}
+                  เลขที่คำสั่งจอง: {confirmedOrder.orderNumber}
                 </h1>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="px-5 py-2.5 rounded-xl btn-sacred-gold font-bold text-xs sm:text-sm flex items-center gap-2"
-              >
-                <Printer className="w-4 h-4" />
-                <span>พิมพ์ใบจอง / บันทึกเป็น PDF</span>
-              </button>
-
               <button
                 type="button"
                 onClick={() => onGoToTracking(confirmedOrder.orderNumber)}
@@ -283,257 +275,44 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
             onOrderUpdated={(o) => setConfirmedOrder((prev) => (prev ? { ...prev, ...o, customerName: prev.customerName, organization: prev.organization, customerPhone: prev.customerPhone, shippingAddress: prev.shippingAddress } : o))}
           />
 
-          {/* Printable Formal Reservation Slip (ใบจองวัตถุมงคล) */}
-          <div
-            id="printable-reservation-slip"
-            className="printable-reservation-slip bg-[#FAF6EC] text-[#18140E] border-2 border-[#8A6D2F] rounded-2xl p-6 sm:p-10 shadow-2xl space-y-6"
+          <section
+            aria-labelledby="receipt-next"
+            className="no-print rounded-2xl border border-[#C9A45C]/60 bg-[#110D08]/90 p-5 sm:p-6 space-y-3"
           >
-            {/* Header with Official BPP 75th Crest */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-[#8A6D2F] pb-5">
-              <div className="flex items-center gap-4">
-                <BppCrestLogo className="w-20 h-16 shrink-0" />
-                <div>
-                  <p className="text-xs font-bold text-[#8A6D2F] uppercase tracking-wider">
-                    กองบัญชาการตำรวจตระเวนชายแดน · วาระครบรอบ ๗๕ ปี
-                  </p>
-                  <h2 className="font-serif-heritage text-2xl sm:text-3xl font-bold text-[#18140E]">
-                    ใบจองวัตถุมงคล &ldquo;สมเด็จพิทักษ์แผ่นดิน&rdquo; ๗๕ ปี ตชด.
-                  </h2>
-                  <p className="text-xs text-[#5A5244]">
-                    เอกสารหลักฐานการสั่งจองอย่างเป็นทางการ (Official Reservation Certificate)
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-[#18140E] text-[#FCE694] px-4 py-3 rounded-xl border border-[#C9A45C] text-right shrink-0">
-                <span className="block text-[11px] text-[#E5C158]">
-                  เลขที่ใบจอง (Reservation No.)
-                </span>
-                <span className="font-tabular text-lg sm:text-xl font-bold tracking-wide">
-                  {confirmedOrder.orderNumber}
-                </span>
-                <span className="block text-[11px] text-[#F7F2E8]/85 mt-0.5">
-                  วันที่จอง: {slipDateThai}
-                </span>
-              </div>
-            </div>
-
-            {/* Reserver Information Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-[#F1E9D6] border border-[#C9A45C]/60 rounded-xl p-4 text-xs sm:text-sm">
-              <div>
-                <span className="block text-[11px] font-semibold text-[#787062]">
-                  ชื่อผู้จอง
-                </span>
-                <span className="font-bold text-[#18140E] text-sm sm:text-base">
-                  {confirmedOrder.customerName || confirmedOrder.maskedCustomerName}
-                </span>
-              </div>
-
-              <div>
-                <span className="block text-[11px] font-semibold text-[#787062]">
-                  หน่วยงาน / สังกัด
-                </span>
-                <span className="font-bold text-[#18140E] text-sm sm:text-base">
-                  {confirmedOrder.organization || 'ประชาชนทั่วไป'}
-                </span>
-              </div>
-
-              <div>
-                <span className="block text-[11px] font-semibold text-[#787062]">
-                  เบอร์โทรศัพท์
-                </span>
-                <span className="font-tabular font-bold text-[#18140E] text-sm sm:text-base">
-                  {confirmedOrder.customerPhone || confirmedOrder.maskedPhone}
-                </span>
-              </div>
-
-              <div>
-                <span className="block text-[11px] font-semibold text-[#787062]">
-                  วันที่ทำรายการจอง
-                </span>
-                <span className="font-bold text-[#18140E] text-sm sm:text-base">
-                  {slipDateThai}
-                </span>
-              </div>
-            </div>
-
-            {/* Delivery / Pickup Method Information on Slip */}
-            <div className="bg-[#FFFFFF] border border-[#C9A45C] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-[#787062]">
-                    วิธีการรับวัตถุมงคล:
+            <h2 id="receipt-next" className="font-serif-heritage text-lg font-bold text-[#FCE694] flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              ใบจองจะได้รับหลังเจ้าหน้าที่ตรวจสอบสลิป
+            </h2>
+            <p className="text-sm text-[#F7F2E8]/85 leading-relaxed">
+              เมื่อเจ้าหน้าที่อนุมัติสลิปแล้ว ระบบจะส่งใบจองไปที่อีเมล{' '}
+              <strong className="text-[#FCE694] break-all">{customerEmail.trim()}</strong>{' '}
+              และดาวน์โหลด/พิมพ์ได้ที่เมนู “ตรวจสอบสถานะ” (ใช้เลขที่คำสั่งจองและเบอร์โทร 4 ตัวท้าย)
+            </p>
+            <ul className="text-xs text-[#F7F2E8]/80 space-y-1">
+              {confirmedOrder.items.map((item, idx) => (
+                <li key={idx} className="flex justify-between gap-3">
+                  <span>
+                    {item.productName.startsWith(item.productCode) ? item.productName : `${item.productCode} ${item.productName}`} × {item.quantity}
                   </span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-[#18140E] text-[#FCE694] text-xs font-bold">
-                    {resolveOrderDeliveryMethod(confirmedOrder) === 'pickup_bpp'
-                      ? 'มารับเองที่ บช.ตชด.'
-                      : 'จัดส่งทางไปรษณีย์ (EMS)'}
-                  </span>
-                </div>
-                <p className="font-semibold text-[#18140E]">
-                  {confirmedOrder.shippingAddress ||
-                    (resolveOrderDeliveryMethod(confirmedOrder) === 'pickup_bpp'
-                      ? 'กองบัญชาการตำรวจตระเวนชายแดน (บช.ตชด.) ถนนพหลโยธิน แขวงสามเสนใน เขตพญาไท กรุงเทพฯ 10400'
-                      : '-')}
-                  {resolveOrderDeliveryMethod(confirmedOrder) === 'shipping' &&
-                    confirmedOrder.postalCode &&
-                    !String(confirmedOrder.shippingAddress || '').includes(
-                      confirmedOrder.postalCode
-                    ) &&
-                    ` (รหัสไปรษณีย์ ${confirmedOrder.postalCode})`}
-                </p>
-              </div>
-              <div className="text-left sm:text-right shrink-0">
-                <span className="block text-[11px] font-semibold text-[#787062]">
-                  ช่องทางชำระเงินที่เลือก
-                </span>
-                <span className="font-bold text-[#8A6D2F]">
-                  {confirmedOrder.paymentMethod === 'promptpay'
-                    ? 'สแกน QR พร้อมเพย์ (PromptPay)'
-                    : `โอนผ่านบัญชีธนาคาร (${confirmedOrder.transferReference || siteConfig.paymentChannels.bankName})`}
-                </span>
-              </div>
-            </div>
-
-            {/* Selected Numbers Highlight (if ช1 was booked) */}
-            {confirmedOrder.selectedNumbers &&
-              confirmedOrder.selectedNumbers.length > 0 && (
-                <div className="bg-[#18140E] text-[#FCE694] border border-[#C9A45C] rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <span className="text-xs font-bold text-[#E5C158] block">
-                      หมายเลขประจำชุด ช1 ชุดทองคำใหญ่ราชาฤกษ์ (1–99) ที่ได้รับสิทธิ์:
-                    </span>
-                    <p className="text-base sm:text-lg font-tabular font-bold text-[#FCE694] mt-0.5">
-                      {confirmedOrder.selectedNumbers
-                        .map((n) => `หมายเลข #${String(n).padStart(2, '0')}`)
-                        .join(' , ')}
-                    </p>
-                  </div>
-                  <span className="px-3 py-1 rounded-lg bg-[#2C2111] border border-[#FCE694] text-xs font-bold">
-                    รวม {confirmedOrder.selectedNumbers.length} ชุด
-                  </span>
-                </div>
+                  <span className="font-tabular">฿{item.lineTotal.toLocaleString()}</span>
+                </li>
+              ))}
+              {confirmedOrder.selectedNumbers && confirmedOrder.selectedNumbers.length > 0 && (
+                <li className="text-[#E5C158]">
+                  หมายเลขที่ล็อกไว้:{' '}
+                  {confirmedOrder.selectedNumbers.map((n) => `#${String(n).padStart(2, '0')}`).join(', ')}
+                </li>
               )}
+            </ul>
+          </section>
 
-            {/* Itemized Table */}
-            <div className="overflow-x-auto border border-[#C9A45C]/70 rounded-xl">
-              <table className="w-full text-left border-collapse text-xs sm:text-sm">
-                <thead>
-                  <tr className="bg-[#18140E] text-[#FCE694]">
-                    <th className="p-3 font-semibold">ลำดับ</th>
-                    <th className="p-3 font-semibold">รหัส</th>
-                    <th className="p-3 font-semibold">รายการวัตถุมงคล</th>
-                    <th className="p-3 font-semibold text-right">ราคา/หน่วย</th>
-                    <th className="p-3 font-semibold text-center">จำนวน</th>
-                    <th className="p-3 font-semibold text-right">จำนวนเงิน (บาท)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#C9A45C]/40 bg-[#FFFFFF]">
-                  {confirmedOrder.items.map((item, idx) => (
-                    <tr key={`${item.productId}-${idx}`}>
-                      <td className="p-3 font-tabular text-[#5A5244]">
-                        {idx + 1}
-                      </td>
-                      <td className="p-3 font-tabular font-bold text-[#18140E]">
-                        {item.productCode}
-                      </td>
-                      <td className="p-3">
-                        <p className="font-bold text-[#18140E]">
-                          {item.productName}
-                        </p>
-                        <p className="text-xs text-[#787062]">{item.series}</p>
-                        {item.selectedNumbers &&
-                          item.selectedNumbers.length > 0 && (
-                            <p className="text-xs font-bold text-[#8A6D2F] mt-0.5">
-                              หมายเลขที่เลือก:{' '}
-                              {item.selectedNumbers
-                                .map((n) => `#${String(n).padStart(2, '0')}`)
-                                .join(', ')}
-                            </p>
-                          )}
-                      </td>
-                      <td className="p-3 text-right font-tabular">
-                        ฿{item.unitPrice.toLocaleString()}
-                      </td>
-                      <td className="p-3 text-center font-tabular font-bold">
-                        {item.quantity}
-                      </td>
-                      <td className="p-3 text-right font-tabular font-bold text-[#18140E]">
-                        ฿{item.lineTotal.toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Grand Total Numeric & Thai Baht Text */}
-            <div className="bg-[#F1E9D6] border-2 border-[#8A6D2F] rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <span className="text-xs font-semibold text-[#5A5244] block">
-                  ยอดรวมทั้งสิ้น (ตัวอักษรไทย):
-                </span>
-                <p
-                  data-testid="confirmed-thai-baht-text"
-                  className="font-serif-heritage text-base sm:text-xl font-bold text-[#18140E]"
-                >
-                  ({slipTotalThaiText})
-                </p>
-              </div>
-
-              <div className="text-left sm:text-right">
-                <span className="text-xs font-semibold text-[#5A5244] block">
-                  ยอดรวมทั้งสิ้น (ตัวเลข):
-                </span>
-                <span
-                  data-testid="confirmed-grand-total"
-                  className="font-tabular text-2xl sm:text-3xl font-bold text-[#18140E]"
-                >
-                  ฿{confirmedOrder.grandTotal.toLocaleString()} บาท
-                </span>
-              </div>
-            </div>
-
-            {/* Footer Signatures & Payment Info */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 text-xs text-[#5A5244] border-t border-[#C9A45C]/50">
-              <div className="space-y-1">
-                <p className="font-bold text-[#18140E]">
-                  ช่องทางชำระเงินบำรุงกองทุน:
-                </p>
-                <p>
-                  {siteConfig.paymentChannels.bankName} · เลขบัญชี{' '}
-                  {siteConfig.paymentChannels.accountNumber}
-                </p>
-                <p>ชื่อบัญชี: {siteConfig.paymentChannels.accountName}</p>
-                <p>สถานะใบจอง: รอตรวจสอบหลักฐานการชำระเงิน</p>
-              </div>
-
-              <div className="flex flex-col sm:items-end justify-end space-y-1">
-                <p className="font-bold text-[#18140E]">
-                  กองบัญชาการตำรวจตระเวนชายแดน
-                </p>
-                <p>{siteConfig.contactAddress}</p>
-                <p>โทร. {siteConfig.contactPhone}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="no-print flex flex-wrap items-center justify-between gap-4">
+          <div className="no-print">
             <button
               type="button"
               onClick={onContinueShopping}
               className="px-5 py-2.5 border border-[#C9A45C]/65 text-[#FCE694] text-xs font-bold rounded-xl hover:bg-[#221A0E]"
             >
               ← กลับสู่หน้าใบรายการวัตถุมงคล
-            </button>
-
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="px-6 py-2.5 btn-sacred-gold text-xs font-bold rounded-xl flex items-center gap-2"
-            >
-              <Printer className="w-4 h-4" />
-              <span>พิมพ์ใบจอง / บันทึกเป็น PDF</span>
             </button>
           </div>
         </div>
@@ -844,7 +623,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                         required
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="เช่น พ.ต.อ. สมชาย พิทักษ์แดนไทย"
+                        placeholder="เช่น ส.ต.ต. ชัยโรจน์ สหัสภูริพัฒน์"
                         className="w-full px-3.5 py-2.5 text-sm border border-[#C9A45C]/55 rounded-xl bg-[#110D08] text-[#F7F2E8] placeholder-[#E5C158]/45 focus:outline-none focus:border-[#FCE694]"
                       />
                       {fieldErrors.customerName && (
@@ -892,7 +671,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                         required
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
-                        placeholder="081-234-5678"
+                        placeholder="0656541786"
                         className="w-full px-3.5 py-2.5 text-sm font-tabular border border-[#C9A45C]/55 rounded-xl bg-[#110D08] text-[#F7F2E8] placeholder-[#E5C158]/45 focus:outline-none focus:border-[#FCE694]"
                       />
                       {fieldErrors.customerPhone && (
@@ -920,6 +699,34 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                         />
                       </div>
                     </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="checkout-email"
+                      className="block text-xs font-semibold text-[#FCE694] mb-1"
+                    >
+                      อีเมล (สำหรับรับใบจอง) *
+                    </label>
+                    <input
+                      id="checkout-email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      required
+                      maxLength={120}
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      placeholder="เช่น name@gmail.com"
+                      className="w-full px-3.5 py-2.5 text-sm border border-[#C9A45C]/55 rounded-xl bg-[#110D08] text-[#F7F2E8] placeholder-[#E5C158]/45 focus:outline-none focus:border-[#FCE694]"
+                    />
+                    {fieldErrors.customerEmail ? (
+                      <p className="text-xs text-red-300 mt-1">{fieldErrors.customerEmail}</p>
+                    ) : (
+                      <p className="text-[11px] text-[#E5C158]/80 mt-1">
+                        ระบบจะส่งใบจองไปที่อีเมลนี้หลังเจ้าหน้าที่ตรวจสอบสลิปการโอนแล้ว
+                      </p>
+                    )}
                   </div>
 
                   {/* ตัวเลือกวิธีการรับวัตถุมงคล: มารับเองที่ บช.ตชด. หรือ จัดส่งทางไปรษณีย์ */}
@@ -1105,6 +912,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                     ช่องทางการชำระเงินและยืนยันใบจอง
                   </h2>
 
+                  {promptPayOn && (
                   <div
                     className={`p-4 rounded-xl border transition-all space-y-3 ${
                       paymentMethod === 'promptpay'
@@ -1144,7 +952,9 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                       </div>
                     )}
                   </div>
+                  )}
 
+                  {bankOn && (
                   <div
                     className={`p-4 rounded-xl border transition-all space-y-3 ${
                       paymentMethod === 'bank_transfer'
@@ -1200,19 +1010,20 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                       </div>
                     )}
                   </div>
+                  )}
 
                   <ol className="rounded-xl border border-[#C9A45C]/40 bg-[#110D08]/90 p-4 text-xs text-[#F7F2E8]/85 space-y-2 list-none">
                     <li className="flex gap-2.5">
                       <span className="w-5 h-5 shrink-0 rounded-full bg-[#FCE694] text-[#18140E] font-bold flex items-center justify-center text-[11px]">1</span>
-                      <span>กด “ยืนยันการจอง” ระบบออกเลขที่ใบจองและล็อกรายการให้ทันที</span>
+                      <span>กด “ยืนยันการจอง” ระบบออกเลขที่คำสั่งจองและล็อกรายการให้ทันที</span>
                     </li>
                     <li className="flex gap-2.5">
                       <span className="w-5 h-5 shrink-0 rounded-full bg-[#FCE694] text-[#18140E] font-bold flex items-center justify-center text-[11px]">2</span>
-                      <span>หน้าถัดไปแสดง QR พร้อมเพย์ที่ใส่ยอดให้แล้ว (หรือเลขบัญชี) ให้โอนเงิน</span>
+                      <span>หน้าถัดไปแสดงเลขบัญชีและยอดเงินให้โอน</span>
                     </li>
                     <li className="flex gap-2.5">
                       <span className="w-5 h-5 shrink-0 rounded-full bg-[#FCE694] text-[#18140E] font-bold flex items-center justify-center text-[11px]">3</span>
-                      <span>อัปโหลดรูปสลิปในหน้าเดียวกัน หรือแนบภายหลังที่เมนู “ตรวจสอบสถานะ” ได้</span>
+                      <span>อัปโหลดรูปสลิปในหน้าเดียวกัน หรือแนบภายหลังที่เมนู “ตรวจสอบสถานะ” ได้ — เจ้าหน้าที่ตรวจสอบแล้วจะส่งใบจองให้ทางอีเมล</span>
                     </li>
                   </ol>
 
@@ -1257,13 +1068,15 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                       className="w-full py-3.5 px-6 rounded-xl btn-sacred-gold disabled:opacity-50 font-bold text-base transition-all"
                     >
                       {!bookingOpen
-                        ? BOOKING_CLOSED_MESSAGE
+                        ? isBookingOpen()
+                          ? SALES_PAUSED_MESSAGE
+                          : BOOKING_CLOSED_MESSAGE
                         : submitting
                         ? 'กำลังสร้างเลขที่ใบจองอัตโนมัติ...'
-                        : 'ยืนยันการจองและออกใบจอง (PDF)'}
+                        : 'ยืนยันการจอง'}
                     </button>
                     <p className="text-center text-[11px] text-[#E5C158]/80">
-                      เมื่อกดยืนยัน ระบบจะออกเลขที่ใบจองอัตโนมัติ และแสดงใบสรุปสำหรับพิมพ์หรือบันทึกเป็น PDF ทันที
+                      เมื่อกดยืนยัน ระบบจะออกเลขที่คำสั่งจองให้ทันที ส่วนใบจองจะส่งทางอีเมลหลังเจ้าหน้าที่ตรวจสอบสลิป
                     </p>
                   </div>
                 </div>

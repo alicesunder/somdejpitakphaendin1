@@ -87,7 +87,14 @@ const PromptPayQr: React.FC<{ promptPayId: string; amount: number; orderNumber: 
 };
 
 export const PaymentPanel: React.FC<PaymentPanelProps> = ({ order, phoneVerify, channels, onOrderUpdated }) => {
-  const [method, setMethod] = useState<'promptpay' | 'bank_transfer'>(order.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'promptpay');
+  // Only offer the channels switched on in the admin settings (PromptPay off = bank transfer only).
+  const allMethods = [['promptpay', 'พร้อมเพย์ (สแกน QR)'], ['bank_transfer', 'โอนบัญชีธนาคาร']] as const;
+  const enabled = allMethods.filter(([k]) =>
+    k === 'promptpay' ? channels.enablePromptPay !== false : channels.enableBankTransfer !== false,
+  );
+  const methods = enabled.length > 0 ? enabled : allMethods.filter(([k]) => k === 'bank_transfer');
+  const [picked, setMethod] = useState<'promptpay' | 'bank_transfer'>(order.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'promptpay');
+  const method = methods.some(([k]) => k === picked) ? picked : methods[0][0];
   const [preview, setPreview] = useState('');
   const [image, setImage] = useState('');
   const [amount, setAmount] = useState(String(order.grandTotal));
@@ -188,11 +195,9 @@ export const PaymentPanel: React.FC<PaymentPanelProps> = ({ order, phoneVerify, 
           <span className="inline-flex w-6 h-6 items-center justify-center rounded-full bg-[#FCE694] text-[#18140E] text-xs mr-2">1</span>
           โอนเงิน
         </p>
+        {methods.length > 1 && (
         <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="ช่องทางชำระเงิน">
-          {([
-            ['promptpay', 'พร้อมเพย์ (สแกน QR)'],
-            ['bank_transfer', 'โอนบัญชีธนาคาร'],
-          ] as const).map(([k, label]) => (
+          {methods.map(([k, label]) => (
             <button
               key={k}
               type="button"
@@ -207,6 +212,7 @@ export const PaymentPanel: React.FC<PaymentPanelProps> = ({ order, phoneVerify, 
             </button>
           ))}
         </div>
+        )}
 
         {method === 'promptpay' ? (
           <div className="grid sm:grid-cols-[auto_1fr] gap-5 items-center">

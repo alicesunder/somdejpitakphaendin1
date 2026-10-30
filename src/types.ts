@@ -148,6 +148,8 @@ export interface OrderRecord {
   slipCount?: number;
   slipTransferAmount?: number;
   slipTransferTime?: string;
+  /** When the reservation certificate was last emailed to customerEmail */
+  receiptEmailedAt?: string;
   items: OrderLineItem[];
   selectedNumbers?: number[];
   subtotal: number;
@@ -245,6 +247,8 @@ export interface SiteConfig {
   paymentChannels: PaymentChannelConfig;
   privacyPolicySummary: string;
   termsSummary: string;
+  /** Admin sales switch; reservations are refused when false (missing = open). */
+  salesOpen?: boolean;
 }
 
 export interface ContactInquiry {

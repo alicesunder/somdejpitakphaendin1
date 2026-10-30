@@ -44,13 +44,14 @@ var initialSiteConfig = {
   standardShippingFee: 0,
   paymentChannels: {
     enableBankTransfer: true,
-    bankName: "\u0E18\u0E19\u0E32\u0E04\u0E32\u0E23\u0E01\u0E23\u0E38\u0E07\u0E44\u0E17\u0E22 / \u0E01\u0E23\u0E38\u0E07\u0E40\u0E17\u0E1E / \u0E01\u0E2A\u0E34\u0E01\u0E23\u0E44\u0E17\u0E22 / \u0E44\u0E17\u0E22\u0E1E\u0E32\u0E13\u0E34\u0E0A\u0E22\u0E4C",
-    accountName: "\u0E01\u0E2D\u0E07\u0E17\u0E38\u0E19\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25 \u0E57\u0E55 \u0E1B\u0E35 \u0E15\u0E0A\u0E14.",
-    accountNumber: "098-0-75999-9",
-    enablePromptPay: true,
-    promptPayId: "0994000759999"
+    bankName: "\u0E1A\u0E21\u0E08.\u0E18\u0E19\u0E32\u0E04\u0E32\u0E23\u0E01\u0E23\u0E38\u0E07\u0E44\u0E17\u0E22",
+    accountName: "\u0E40\u0E07\u0E34\u0E19\u0E17\u0E38\u0E19\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E1E\u0E23\u0E30\u0E40\u0E01\u0E48\u0E32",
+    accountNumber: "0341427632",
+    // No PromptPay ID for this account yet: transfers go to the Krung Thai account only.
+    enablePromptPay: false,
+    promptPayId: ""
   },
-  privacyPolicySummary: "\u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E31\u0E14\u0E40\u0E01\u0E47\u0E1A\u0E40\u0E09\u0E1E\u0E32\u0E30\u0E0A\u0E37\u0E48\u0E2D \u0E2B\u0E19\u0E48\u0E27\u0E22\u0E07\u0E32\u0E19 \u0E41\u0E25\u0E30\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E42\u0E17\u0E23\u0E28\u0E31\u0E1E\u0E17\u0E4C\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E43\u0E0A\u0E49\u0E43\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25\u0E41\u0E25\u0E30\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19",
+  privacyPolicySummary: "\u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E31\u0E14\u0E40\u0E01\u0E47\u0E1A\u0E40\u0E09\u0E1E\u0E32\u0E30\u0E0A\u0E37\u0E48\u0E2D \u0E2B\u0E19\u0E48\u0E27\u0E22\u0E07\u0E32\u0E19 \u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E42\u0E17\u0E23\u0E28\u0E31\u0E1E\u0E17\u0E4C \u0E41\u0E25\u0E30\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E43\u0E0A\u0E49\u0E43\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25\u0E41\u0E25\u0E30\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19",
   termsSummary: "\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25\u0E2A\u0E21\u0E40\u0E14\u0E47\u0E08\u0E1E\u0E34\u0E17\u0E31\u0E01\u0E29\u0E4C\u0E41\u0E1C\u0E48\u0E19\u0E14\u0E34\u0E19 \u0E57\u0E55 \u0E1B\u0E35 \u0E15\u0E0A\u0E14. \u0E17\u0E38\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E1C\u0E48\u0E32\u0E19\u0E01\u0E32\u0E23\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E21\u0E1A\u0E39\u0E23\u0E13\u0E4C\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E01\u0E25\u0E48\u0E2D\u0E07\u0E40\u0E14\u0E34\u0E21\u0E41\u0E25\u0E30\u0E1A\u0E31\u0E15\u0E23\u0E23\u0E31\u0E1A\u0E23\u0E2D\u0E07\u0E01\u0E48\u0E2D\u0E19\u0E2A\u0E48\u0E07\u0E21\u0E2D\u0E1A"
 };
 var MOLD_SIZE_NOTE_BOTH = "\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E34\u0E22\u0E21 (\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E43\u0E2B\u0E0D\u0E48): \u0E14\u0E49\u0E32\u0E19\u0E1A\u0E19 2.3 \xD7 \u0E2A\u0E39\u0E07 3.7 \xD7 \u0E14\u0E49\u0E32\u0E19\u0E25\u0E48\u0E32\u0E07 2.5 \u0E0B\u0E21. \u0E2B\u0E19\u0E32 1 \u0E21\u0E21. | \u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E04\u0E30\u0E41\u0E19\u0E19 (\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E40\u0E25\u0E47\u0E01): \u0E14\u0E49\u0E32\u0E19\u0E1A\u0E19 1.2 \xD7 \u0E2A\u0E39\u0E07 2.1 \xD7 \u0E14\u0E49\u0E32\u0E19\u0E25\u0E48\u0E32\u0E07 1.3 \u0E0B\u0E21. \u0E2B\u0E19\u0E32 1 \u0E21\u0E21.";
@@ -949,9 +950,9 @@ function numberToThaiBahtText(amount) {
     return "\u0E28\u0E39\u0E19\u0E22\u0E4C\u0E1A\u0E32\u0E17\u0E16\u0E49\u0E27\u0E19";
   }
   const rounded = Math.round(amount * 100);
-  const baht = Math.floor(rounded / 100);
+  const baht2 = Math.floor(rounded / 100);
   const satang = rounded % 100;
-  const bahtText = baht > 0 ? `${convertIntegerToThaiWords(baht)}\u0E1A\u0E32\u0E17` : "";
+  const bahtText = baht2 > 0 ? `${convertIntegerToThaiWords(baht2)}\u0E1A\u0E32\u0E17` : "";
   if (satang === 0) {
     return `${bahtText || "\u0E28\u0E39\u0E19\u0E22\u0E4C\u0E1A\u0E32\u0E17"}\u0E16\u0E49\u0E27\u0E19`;
   }
@@ -1073,6 +1074,12 @@ function validateCheckoutForm(input) {
   const digitsOnlyPhone = (input.customerPhone || "").replace(/\D/g, "");
   if (digitsOnlyPhone.length < 9 || digitsOnlyPhone.length > 10) {
     fieldErrors.customerPhone = "\u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E30\u0E1A\u0E38\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E42\u0E17\u0E23\u0E28\u0E31\u0E1E\u0E17\u0E4C 9\u201310 \u0E2B\u0E25\u0E31\u0E01\u0E17\u0E35\u0E48\u0E15\u0E34\u0E14\u0E15\u0E48\u0E2D\u0E44\u0E14\u0E49";
+  }
+  if (input.customerEmail !== void 0) {
+    const email = input.customerEmail.trim();
+    if (!/^[^s@]+@[^s@]+.[^s@]{2,}$/.test(email) || email.length > 120) {
+      fieldErrors.customerEmail = "\u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E30\u0E1A\u0E38\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E43\u0E2B\u0E49\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07 (\u0E43\u0E0A\u0E49\u0E2A\u0E48\u0E07\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E07\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E2A\u0E25\u0E34\u0E1B)";
+    }
   }
   if (input.deliveryMethod === "shipping") {
     const address = (input.shippingAddress || "").trim();
@@ -1609,12 +1616,133 @@ function rateLimiter(getHit) {
 }
 
 // src/config/booking.ts
-var BOOKING_OPENS_AT = "2026-11-01T00:00:00+07:00";
-var BOOKING_OPEN_DATE_TEXT = "1 \u0E1E\u0E24\u0E28\u0E08\u0E34\u0E01\u0E32\u0E22\u0E19 2569";
+var BOOKING_OPENS_AT = "2026-10-30T00:00:00+07:00";
+var BOOKING_OPEN_DATE_TEXT = "30 \u0E15\u0E38\u0E25\u0E32\u0E04\u0E21 2569";
 var BOOKING_CLOSED_MESSAGE = `\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E40\u0E1B\u0E34\u0E14\u0E43\u0E2B\u0E49\u0E08\u0E2D\u0E07 \u2014 \u0E40\u0E1B\u0E34\u0E14\u0E43\u0E2B\u0E49\u0E08\u0E2D\u0E07\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 ${BOOKING_OPEN_DATE_TEXT}`;
+var SALES_PAUSED_MESSAGE = "\u0E1B\u0E34\u0E14\u0E23\u0E31\u0E1A\u0E08\u0E2D\u0E07\u0E0A\u0E31\u0E48\u0E27\u0E04\u0E23\u0E32\u0E27 \u2014 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E34\u0E14\u0E15\u0E32\u0E21\u0E1B\u0E23\u0E30\u0E01\u0E32\u0E28\u0E08\u0E32\u0E01\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48";
 function isBookingOpen(now = Date.now(), opensAt = BOOKING_OPENS_AT) {
   const t = Date.parse(opensAt);
   return Number.isNaN(t) ? true : now >= t;
+}
+
+// server/mailer.ts
+import nodemailer from "nodemailer";
+var SITE_URL = "https://www.somdejpitakphaendin.com";
+function isMailConfigured() {
+  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+var transport = null;
+function getTransport() {
+  if (transport) return transport;
+  const port = Number(process.env.SMTP_PORT || 465);
+  transport = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port,
+    secure: port === 465,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    // A serverless function has 30 s in total; give up well before that.
+    connectionTimeout: 8e3,
+    greetingTimeout: 8e3,
+    socketTimeout: 12e3
+  });
+  return transport;
+}
+var isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+var esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+var baht = (n) => `${Number(n || 0).toLocaleString("th-TH")} \u0E1A\u0E32\u0E17`;
+var itemLabel = (it) => it.productName.startsWith(it.productCode) ? it.productName : `${it.productCode} ${it.productName}`;
+var thaiDate = (iso) => new Date(iso).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "long", year: "numeric" });
+function buildReceiptEmail(order, config) {
+  const pickup = order.deliveryMethod === "pickup_bpp";
+  const pay = config.paymentChannels;
+  const date = order.reservationDateThai || thaiDate(order.createdAt);
+  const numbers = order.selectedNumbers?.length ? order.selectedNumbers.map((n) => `#${String(n).padStart(2, "0")}`).join(", ") : "";
+  const trackUrl = `${SITE_URL}/?track=${encodeURIComponent(order.orderNumber)}`;
+  const rows = order.items.map(
+    (it) => `<tr>
+        <td style="padding:8px;border-bottom:1px solid #E5D9B8">${esc(itemLabel(it))}</td>
+        <td style="padding:8px;border-bottom:1px solid #E5D9B8;text-align:center">${it.quantity}</td>
+        <td style="padding:8px;border-bottom:1px solid #E5D9B8;text-align:right">${baht(it.lineTotal)}</td>
+      </tr>`
+  ).join("");
+  const subject = `\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25 \u0E2A\u0E21\u0E40\u0E14\u0E47\u0E08\u0E1E\u0E34\u0E17\u0E31\u0E01\u0E29\u0E4C\u0E41\u0E1C\u0E48\u0E19\u0E14\u0E34\u0E19 \u0E40\u0E25\u0E02\u0E17\u0E35\u0E48 ${order.orderNumber}`;
+  const html = `<!doctype html><html lang="th"><body style="margin:0;background:#F3EEE2;font-family:Tahoma,'Noto Sans Thai',sans-serif;color:#18140E">
+<div style="max-width:640px;margin:0 auto;padding:24px 16px">
+  <div style="background:#FAF6EC;border:2px solid #8A6D2F;border-radius:16px;padding:24px">
+    <p style="margin:0;font-size:12px;color:#8A6D2F;font-weight:bold">\u0E01\u0E2D\u0E07\u0E1A\u0E31\u0E0D\u0E0A\u0E32\u0E01\u0E32\u0E23\u0E15\u0E33\u0E23\u0E27\u0E08\u0E15\u0E23\u0E30\u0E40\u0E27\u0E19\u0E0A\u0E32\u0E22\u0E41\u0E14\u0E19 \xB7 \u0E27\u0E32\u0E23\u0E30\u0E04\u0E23\u0E1A\u0E23\u0E2D\u0E1A \u0E57\u0E55 \u0E1B\u0E35</p>
+    <h1 style="margin:6px 0 4px;font-size:22px">\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25 \u201C\u0E2A\u0E21\u0E40\u0E14\u0E47\u0E08\u0E1E\u0E34\u0E17\u0E31\u0E01\u0E29\u0E4C\u0E41\u0E1C\u0E48\u0E19\u0E14\u0E34\u0E19\u201D \u0E57\u0E55 \u0E1B\u0E35 \u0E15\u0E0A\u0E14.</h1>
+    <p style="margin:0 0 16px;font-size:13px;color:#5A5244">\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48\u0E43\u0E1A\u0E08\u0E2D\u0E07 <b style="color:#18140E">${esc(order.orderNumber)}</b> \xB7 \u0E27\u0E31\u0E19\u0E17\u0E35\u0E48\u0E08\u0E2D\u0E07 ${esc(date)}</p>
+
+    <div style="background:#E8F5E9;border:1px solid #81C784;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:16px">
+      \u2705 \u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E23\u0E49\u0E2D\u0E22\u0E41\u0E25\u0E49\u0E27 \u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E19\u0E35\u0E49\u0E43\u0E0A\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E2B\u0E25\u0E31\u0E01\u0E10\u0E32\u0E19\u0E01\u0E32\u0E23\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07\u0E44\u0E14\u0E49
+    </div>
+
+    <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:12px">
+      <tr><td style="padding:3px 0;color:#5A5244;width:130px">\u0E0A\u0E37\u0E48\u0E2D\u0E1C\u0E39\u0E49\u0E08\u0E2D\u0E07</td><td><b>${esc(order.customerName)}</b></td></tr>
+      <tr><td style="padding:3px 0;color:#5A5244">\u0E2B\u0E19\u0E48\u0E27\u0E22\u0E07\u0E32\u0E19</td><td>${esc(order.organization || "\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19\u0E17\u0E31\u0E48\u0E27\u0E44\u0E1B")}</td></tr>
+      <tr><td style="padding:3px 0;color:#5A5244">\u0E42\u0E17\u0E23\u0E28\u0E31\u0E1E\u0E17\u0E4C</td><td>${esc(order.customerPhone)}</td></tr>
+      <tr><td style="padding:3px 0;color:#5A5244">\u0E01\u0E32\u0E23\u0E23\u0E31\u0E1A\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25</td><td>${esc(pickup ? "\u0E21\u0E32\u0E23\u0E31\u0E1A\u0E40\u0E2D\u0E07\u0E17\u0E35\u0E48 \u0E1A\u0E0A.\u0E15\u0E0A\u0E14." : "\u0E08\u0E31\u0E14\u0E2A\u0E48\u0E07\u0E17\u0E32\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C")}</td></tr>
+      <tr><td style="padding:3px 0;color:#5A5244;vertical-align:top">${pickup ? "\u0E2A\u0E16\u0E32\u0E19\u0E17\u0E35\u0E48\u0E23\u0E31\u0E1A" : "\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48\u0E08\u0E31\u0E14\u0E2A\u0E48\u0E07"}</td><td>${esc(order.shippingAddress)}</td></tr>
+      ${numbers ? `<tr><td style="padding:3px 0;color:#5A5244">\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48\u0E08\u0E2D\u0E07</td><td><b>${esc(numbers)}</b></td></tr>` : ""}
+    </table>
+
+    <table style="width:100%;font-size:13px;border-collapse:collapse">
+      <thead><tr style="background:#18140E;color:#FCE694">
+        <th style="padding:8px;text-align:left">\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23</th><th style="padding:8px">\u0E08\u0E33\u0E19\u0E27\u0E19</th><th style="padding:8px;text-align:right">\u0E23\u0E27\u0E21</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <table style="width:100%;font-size:13px;margin-top:8px">
+      ${order.shippingTotal ? `<tr><td style="text-align:right;color:#5A5244">\u0E04\u0E48\u0E32\u0E08\u0E31\u0E14\u0E2A\u0E48\u0E07</td><td style="text-align:right;width:140px">${baht(order.shippingTotal)}</td></tr>` : ""}
+      <tr><td style="text-align:right;font-weight:bold">\u0E22\u0E2D\u0E14\u0E23\u0E27\u0E21\u0E17\u0E31\u0E49\u0E07\u0E2A\u0E34\u0E49\u0E19</td><td style="text-align:right;font-size:18px;font-weight:bold">${baht(order.grandTotal)}</td></tr>
+      ${order.grandTotalThaiText ? `<tr><td colspan="2" style="text-align:right;color:#5A5244">(${esc(order.grandTotalThaiText)})</td></tr>` : ""}
+    </table>
+
+    <hr style="border:none;border-top:1px solid #C9A45C;margin:18px 0">
+    <p style="font-size:12px;color:#5A5244;margin:0 0 4px">\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E40\u0E02\u0E49\u0E32\u0E1A\u0E31\u0E0D\u0E0A\u0E35: ${esc(pay.bankName)} \u0E40\u0E25\u0E02\u0E17\u0E35\u0E48 ${esc(pay.accountNumber)} \u0E0A\u0E37\u0E48\u0E2D\u0E1A\u0E31\u0E0D\u0E0A\u0E35 ${esc(pay.accountName)}</p>
+    <p style="font-size:12px;color:#5A5244;margin:0 0 4px">\u0E15\u0E34\u0E14\u0E15\u0E32\u0E21\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E01\u0E32\u0E23\u0E40\u0E15\u0E23\u0E35\u0E22\u0E21\u0E41\u0E25\u0E30\u0E08\u0E31\u0E14\u0E2A\u0E48\u0E07: <a href="${trackUrl}" style="color:#8A6D2F">${esc(SITE_URL.replace("https://", ""))}</a> (\u0E43\u0E0A\u0E49\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E41\u0E25\u0E30\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23 4 \u0E15\u0E31\u0E27\u0E17\u0E49\u0E32\u0E22)</p>
+    <p style="font-size:12px;color:#5A5244;margin:0">${esc(config.contactUnitName || "\u0E01\u0E2D\u0E07\u0E1A\u0E31\u0E0D\u0E0A\u0E32\u0E01\u0E32\u0E23\u0E15\u0E33\u0E23\u0E27\u0E08\u0E15\u0E23\u0E30\u0E40\u0E27\u0E19\u0E0A\u0E32\u0E22\u0E41\u0E14\u0E19")} \xB7 \u0E42\u0E17\u0E23. ${esc(config.contactPhone)}</p>
+  </div>
+  <p style="font-size:11px;color:#8A7F6A;text-align:center;margin-top:12px">\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E19\u0E35\u0E49\u0E2A\u0E48\u0E07\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34\u0E08\u0E32\u0E01\u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E01\u0E47\u0E1A\u0E44\u0E27\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E2B\u0E25\u0E31\u0E01\u0E10\u0E32\u0E19</p>
+</div></body></html>`;
+  const text = [
+    subject,
+    `\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48\u0E08\u0E2D\u0E07 ${date}`,
+    "\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E23\u0E49\u0E2D\u0E22\u0E41\u0E25\u0E49\u0E27",
+    "",
+    `\u0E0A\u0E37\u0E48\u0E2D\u0E1C\u0E39\u0E49\u0E08\u0E2D\u0E07: ${order.customerName}`,
+    `\u0E2B\u0E19\u0E48\u0E27\u0E22\u0E07\u0E32\u0E19: ${order.organization || "\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19\u0E17\u0E31\u0E48\u0E27\u0E44\u0E1B"}`,
+    `\u0E42\u0E17\u0E23\u0E28\u0E31\u0E1E\u0E17\u0E4C: ${order.customerPhone}`,
+    `\u0E01\u0E32\u0E23\u0E23\u0E31\u0E1A\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25: ${pickup ? "\u0E21\u0E32\u0E23\u0E31\u0E1A\u0E40\u0E2D\u0E07\u0E17\u0E35\u0E48 \u0E1A\u0E0A.\u0E15\u0E0A\u0E14." : "\u0E08\u0E31\u0E14\u0E2A\u0E48\u0E07\u0E17\u0E32\u0E07\u0E44\u0E1B\u0E23\u0E29\u0E13\u0E35\u0E22\u0E4C"} \u2014 ${order.shippingAddress}`,
+    numbers ? `\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48\u0E08\u0E2D\u0E07: ${numbers}` : "",
+    "",
+    ...order.items.map((it) => `- ${itemLabel(it)} x${it.quantity} = ${baht(it.lineTotal)}`),
+    order.shippingTotal ? `\u0E04\u0E48\u0E32\u0E08\u0E31\u0E14\u0E2A\u0E48\u0E07 ${baht(order.shippingTotal)}` : "",
+    `\u0E22\u0E2D\u0E14\u0E23\u0E27\u0E21\u0E17\u0E31\u0E49\u0E07\u0E2A\u0E34\u0E49\u0E19 ${baht(order.grandTotal)}`,
+    "",
+    `\u0E15\u0E34\u0E14\u0E15\u0E32\u0E21\u0E2A\u0E16\u0E32\u0E19\u0E30: ${trackUrl}`,
+    `${config.contactUnitName || "\u0E01\u0E2D\u0E07\u0E1A\u0E31\u0E0D\u0E0A\u0E32\u0E01\u0E32\u0E23\u0E15\u0E33\u0E23\u0E27\u0E08\u0E15\u0E23\u0E30\u0E40\u0E27\u0E19\u0E0A\u0E32\u0E22\u0E41\u0E14\u0E19"} \u0E42\u0E17\u0E23. ${config.contactPhone}`
+  ].filter((l) => l !== "").join("\n");
+  return { subject, html, text };
+}
+async function sendReceiptEmail(order, config) {
+  const to = String(order.customerEmail || "").trim();
+  if (!to || !isValidEmail(to)) return { sent: false, reason: "no_email" };
+  if (!isMailConfigured()) return { sent: false, reason: "not_configured" };
+  const { subject, html, text } = buildReceiptEmail(order, config);
+  try {
+    await getTransport().sendMail({
+      from: process.env.MAIL_FROM || `"\u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25 \u0E57\u0E55 \u0E1B\u0E35 \u0E15\u0E0A\u0E14." <${process.env.SMTP_USER}>`,
+      to,
+      subject,
+      html,
+      text
+    });
+    return { sent: true, to };
+  } catch (err) {
+    console.error("[mail] receipt failed:", err.message);
+    return { sent: false, reason: "failed", error: err.message };
+  }
 }
 
 // server.ts
@@ -1799,6 +1927,11 @@ function enrichRajaSlotsForAdmin() {
 function bookingOpen() {
   return isBookingOpen(Date.now(), process.env.BOOKING_OPENS_AT || void 0);
 }
+function salesClosedReason() {
+  if (!bookingOpen()) return BOOKING_CLOSED_MESSAGE;
+  if (store.siteConfig.salesOpen === false) return SALES_PAUSED_MESSAGE;
+  return null;
+}
 var SLIP_DIR = path.join(DATA_DIR, "slips");
 var slipFile = (orderId) => path.join(SLIP_DIR, `${orderId.replace(/[^\w-]/g, "_")}.json`);
 async function writeSlip(rec) {
@@ -1938,8 +2071,9 @@ function createApp() {
     });
   });
   app2.post("/api/raja-slots/toggle", (req, res) => {
-    if (!bookingOpen()) {
-      res.status(403).json({ error: BOOKING_CLOSED_MESSAGE, bookingClosed: true });
+    const closed = salesClosedReason();
+    if (closed) {
+      res.status(403).json({ error: closed, bookingClosed: true });
       return;
     }
     purgeExpiredRajaSlotHolds();
@@ -2018,8 +2152,9 @@ function createApp() {
     res.json(calc);
   });
   app2.post("/api/orders", (req, res) => {
-    if (!bookingOpen()) {
-      res.status(403).json({ error: BOOKING_CLOSED_MESSAGE, bookingClosed: true });
+    const closed = salesClosedReason();
+    if (closed) {
+      res.status(403).json({ error: closed, bookingClosed: true });
       return;
     }
     purgeExpiredRajaSlotHolds();
@@ -2057,6 +2192,7 @@ function createApp() {
       customerName,
       organization: cleanOrg,
       customerPhone,
+      customerEmail: String(customerEmail ?? ""),
       deliveryMethod: resolvedDeliveryMethod,
       shippingAddress: shippingAddress || cleanOrg,
       postalCode: postalCode || "",
@@ -2123,7 +2259,7 @@ function createApp() {
       customerName: String(customerName).trim(),
       organization: cleanOrg,
       customerPhone: String(customerPhone).trim(),
-      customerEmail: customerEmail ? String(customerEmail).trim() : void 0,
+      customerEmail: String(customerEmail).trim(),
       deliveryMethod: effectiveDeliveryMethod,
       shippingAddress: formattedShippingAddress,
       postalCode: effectiveDeliveryMethod === "pickup_bpp" ? "10400" : String(postalCode || "10400").trim(),
@@ -2319,7 +2455,8 @@ function createApp() {
       rajaSlots: enrichedSlots,
       news: store.news,
       siteConfig: store.siteConfig,
-      inquiries: store.inquiries
+      inquiries: store.inquiries,
+      mailConfigured: isMailConfigured()
     });
   });
   app2.patch(
@@ -2582,7 +2719,7 @@ function createApp() {
       res.status(500).json({ error: "\u0E40\u0E1B\u0E34\u0E14\u0E2A\u0E25\u0E34\u0E1B\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08" });
     }
   });
-  app2.patch("/api/admin/orders/:id/status", requireAdmin, (req, res) => {
+  app2.patch("/api/admin/orders/:id/status", requireAdmin, async (req, res) => {
     const order = store.orders.find((o) => o.id === req.params.id);
     if (!order) {
       res.status(404).json({ error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07" });
@@ -2647,8 +2784,43 @@ function createApp() {
       shippingStatus: order.shippingStatus,
       note: String(note || "").trim() || `\u0E1B\u0E23\u0E31\u0E1A\u0E1B\u0E23\u0E38\u0E07\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E43\u0E1A\u0E08\u0E2D\u0E07${order.trackingNumber ? ` (\u0E40\u0E25\u0E02\u0E1E\u0E31\u0E2A\u0E14\u0E38: ${order.trackingNumber})` : ""}`
     });
+    let receiptEmail = null;
+    if (previousPaymentStatus !== "verified_paid" && order.paymentStatus === "verified_paid") {
+      receiptEmail = await sendReceiptEmail(order, store.siteConfig);
+      if (receiptEmail.sent) {
+        order.receiptEmailedAt = (/* @__PURE__ */ new Date()).toISOString();
+        order.statusHistory[0].note += ` \xB7 \u0E2A\u0E48\u0E07\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E17\u0E32\u0E07\u0E2D\u0E35\u0E40\u0E21\u0E25\u0E41\u0E25\u0E49\u0E27 (${receiptEmail.to})`;
+      }
+    }
     saveStore(store);
-    res.json({ order, rajaSlots: enrichRajaSlotsForAdmin() });
+    res.json({ order, rajaSlots: enrichRajaSlotsForAdmin(), receiptEmail });
+  });
+  app2.post("/api/admin/orders/:id/send-receipt", requireAdmin, async (req, res) => {
+    const order = store.orders.find((o) => o.id === req.params.id);
+    if (!order) {
+      res.status(404).json({ error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07" });
+      return;
+    }
+    if (order.paymentStatus !== "verified_paid") {
+      res.status(409).json({ error: "\u0E2A\u0E48\u0E07\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E44\u0E14\u0E49\u0E2B\u0E25\u0E31\u0E07\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E49\u0E27\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19" });
+      return;
+    }
+    const email = String(req.body?.email ?? "").trim();
+    if (email) order.customerEmail = email.slice(0, 120);
+    const receiptEmail = await sendReceiptEmail(order, store.siteConfig);
+    if (receiptEmail.sent) order.receiptEmailedAt = (/* @__PURE__ */ new Date()).toISOString();
+    saveStore(store);
+    res.json({ order, receiptEmail });
+  });
+  app2.patch("/api/admin/sales", requireAdmin, (req, res) => {
+    const open = req.body?.open;
+    if (typeof open !== "boolean") {
+      res.status(400).json({ error: "\u0E23\u0E30\u0E1A\u0E38\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E40\u0E1B\u0E34\u0E14/\u0E1B\u0E34\u0E14\u0E01\u0E32\u0E23\u0E02\u0E32\u0E22\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07" });
+      return;
+    }
+    store.siteConfig = { ...store.siteConfig, salesOpen: open };
+    saveStore(store);
+    res.json({ salesOpen: open, siteConfig: store.siteConfig });
   });
   app2.put("/api/admin/config", requireAdmin, (req, res) => {
     const updates = req.body || {};

@@ -8,6 +8,7 @@ import { CalendarClock, CheckCircle2, Heart } from 'lucide-react';
 import {
   BOOKING_CLOSED_MESSAGE,
   BOOKING_OPEN_DATE_TEXT,
+  SALES_PAUSED_MESSAGE,
   isBookingOpen,
 } from './config/booking';
 import {
@@ -118,14 +119,17 @@ export default function App() {
   });
 
   const [cartToast, setCartToast] = useState<string | null>(null);
-  const [bookingOpen, setBookingOpen] = useState(() => isBookingOpen());
+  const [dateOpen, setDateOpen] = useState(() => isBookingOpen());
   useEffect(() => {
-    if (bookingOpen) return;
+    if (dateOpen) return;
     const timer = window.setInterval(() => {
-      if (isBookingOpen()) setBookingOpen(true);
+      if (isBookingOpen()) setDateOpen(true);
     }, 30000);
     return () => window.clearInterval(timer);
-  }, [bookingOpen]);
+  }, [dateOpen]);
+  // Reservations need both the opening date and the admin's sales switch (siteConfig.salesOpen).
+  const bookingOpen = dateOpen && siteConfig.salesOpen !== false;
+  const closedMessage = dateOpen ? SALES_PAUSED_MESSAGE : BOOKING_CLOSED_MESSAGE;
   const [wishlistToast, setWishlistToast] = useState<string | null>(null);
 
   const fetchStoreBootstrap = useCallback(async () => {
@@ -282,6 +286,18 @@ export default function App() {
     [cart]
   );
 
+  // The receipt email links to /?track=<order number> to open the tracking page directly.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const track = params.get('track');
+    if (!track) return;
+    setTrackingOrderNumber(track.slice(0, 40));
+    setCurrentView('tracking');
+    params.delete('track');
+    const rest = params.toString();
+    history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
+  }, []);
+
   // The back office is not linked anywhere public: staff open it with /#admin
   useEffect(() => {
     const check = () => {
@@ -334,7 +350,7 @@ export default function App() {
       slotNumber: number
     ): Promise<{ success: boolean; error?: string }> => {
       if (!bookingOpen) {
-        return { success: false, error: BOOKING_CLOSED_MESSAGE };
+        return { success: false, error: closedMessage };
       }
       try {
         const res = await fetch('/api/raja-slots/toggle', {
@@ -366,12 +382,12 @@ export default function App() {
         };
       }
     },
-    [sessionId]
+    [sessionId, bookingOpen, closedMessage]
   );
 
   const handleAddToCart = (product: AmuletProduct, quantity = 1) => {
     if (!bookingOpen) {
-      setCartToast(BOOKING_CLOSED_MESSAGE);
+      setCartToast(closedMessage);
       setTimeout(() => setCartToast(null), 4000);
       return;
     }
@@ -415,7 +431,7 @@ export default function App() {
 
   const handleBuyNow = (product: AmuletProduct, quantity = 1) => {
     if (!bookingOpen) {
-      setCartToast(BOOKING_CLOSED_MESSAGE);
+      setCartToast(closedMessage);
       setTimeout(() => setCartToast(null), 4000);
       return;
     }
@@ -528,9 +544,11 @@ export default function App() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-center gap-3 text-center">
             <CalendarClock className="w-5 h-5 shrink-0" aria-hidden="true" />
             <p className="text-sm sm:text-base font-bold leading-snug">
-              ยังไม่เปิดให้จอง
+              {dateOpen ? 'ปิดรับจองชั่วคราว' : 'ยังไม่เปิดให้จอง'}
               <span className="block sm:inline sm:ml-2 font-semibold text-[#F7F2E8]">
-                เปิดให้จองวันที่ {BOOKING_OPEN_DATE_TEXT}
+                {dateOpen
+                  ? 'กรุณาติดตามประกาศจากเจ้าหน้าที่'
+                  : `เปิดให้จองวันที่ ${BOOKING_OPEN_DATE_TEXT}`}
               </span>
             </p>
           </div>
@@ -653,7 +671,7 @@ export default function App() {
           )}
 
           {currentView === 'tracking' && (
-            <OrderTrackingView initialOrderNumber={trackingOrderNumber} paymentChannels={siteConfig.paymentChannels} />
+            <OrderTrackingView initialOrderNumber={trackingOrderNumber} paymentChannels={siteConfig.paymentChannels} siteConfig={siteConfig} />
           )}
 
           {currentView === 'about' && (

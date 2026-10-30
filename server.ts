@@ -37,7 +37,8 @@ import {
 } from './server/firestoreStore';
 import { createPostgresStore, isPostgresConfigured } from './server/postgresStore';
 import { HitFn, memoryHit, rateLimiter } from './server/rateLimit';
-import { BOOKING_CLOSED_MESSAGE, isBookingOpen } from './src/config/booking';
+import { BOOKING_CLOSED_MESSAGE, SALES_PAUSED_MESSAGE, isBookingOpen } from './src/config/booking';
+import { isMailConfigured, sendReceiptEmail } from './server/mailer';
 
 interface StoreData {
   siteConfig: SiteConfig;
@@ -283,6 +284,13 @@ function bookingOpen(): boolean {
   return isBookingOpen(Date.now(), process.env.BOOKING_OPENS_AT || undefined);
 }
 
+/** Why reservations are refused right now (opening date, or the admin's sales switch), or null. */
+function salesClosedReason(): string | null {
+  if (!bookingOpen()) return BOOKING_CLOSED_MESSAGE;
+  if (store.siteConfig.salesOpen === false) return SALES_PAUSED_MESSAGE;
+  return null;
+}
+
 const SLIP_DIR = path.join(DATA_DIR, 'slips');
 const slipFile = (orderId: string) => path.join(SLIP_DIR, `${orderId.replace(/[^\w-]/g, '_')}.json`);
 
@@ -470,8 +478,9 @@ export function createApp() {
   });
 
   app.post('/api/raja-slots/toggle', (req, res) => {
-    if (!bookingOpen()) {
-      res.status(403).json({ error: BOOKING_CLOSED_MESSAGE, bookingClosed: true });
+    const closed = salesClosedReason();
+    if (closed) {
+      res.status(403).json({ error: closed, bookingClosed: true });
       return;
     }
     purgeExpiredRajaSlotHolds();
@@ -562,8 +571,9 @@ export function createApp() {
 
   // 3. Create Order (Server-side validation, atomic number lock 1-99, stock check, idempotency)
   app.post('/api/orders', (req, res) => {
-    if (!bookingOpen()) {
-      res.status(403).json({ error: BOOKING_CLOSED_MESSAGE, bookingClosed: true });
+    const closed = salesClosedReason();
+    if (closed) {
+      res.status(403).json({ error: closed, bookingClosed: true });
       return;
     }
     purgeExpiredRajaSlotHolds();
@@ -609,6 +619,7 @@ export function createApp() {
       customerName,
       organization: cleanOrg,
       customerPhone,
+      customerEmail: String(customerEmail ?? ''),
       deliveryMethod: resolvedDeliveryMethod,
       shippingAddress: shippingAddress || cleanOrg,
       postalCode: postalCode || '',
@@ -703,7 +714,7 @@ export function createApp() {
       customerName: String(customerName).trim(),
       organization: cleanOrg,
       customerPhone: String(customerPhone).trim(),
-      customerEmail: customerEmail ? String(customerEmail).trim() : undefined,
+      customerEmail: String(customerEmail).trim(),
       deliveryMethod: effectiveDeliveryMethod,
       shippingAddress: formattedShippingAddress,
       postalCode:
@@ -958,6 +969,7 @@ export function createApp() {
       news: store.news,
       siteConfig: store.siteConfig,
       inquiries: store.inquiries,
+      mailConfigured: isMailConfigured(),
     });
   });
 
@@ -1284,7 +1296,7 @@ export function createApp() {
   });
 
   // 9. Admin Order Status & Tracking Update (With Audit Trail & Raja Slot Release on Reject)
-  app.patch('/api/admin/orders/:id/status', requireAdmin, (req, res) => {
+  app.patch('/api/admin/orders/:id/status', requireAdmin, async (req, res) => {
     const order = store.orders.find((o) => o.id === req.params.id);
     if (!order) {
       res.status(404).json({ error: 'ไม่พบรายการคำสั่งจอง' });
@@ -1362,8 +1374,51 @@ export function createApp() {
         }`,
     });
 
+    // Approving the slip sends the reservation certificate to the buyer. It goes out before the
+    // response (a serverless function stops once it has answered); a failed send never blocks the
+    // approval — staff can resend from the order.
+    let receiptEmail = null;
+    if (previousPaymentStatus !== 'verified_paid' && order.paymentStatus === 'verified_paid') {
+      receiptEmail = await sendReceiptEmail(order, store.siteConfig);
+      if (receiptEmail.sent) {
+        order.receiptEmailedAt = new Date().toISOString();
+        order.statusHistory[0].note += ` · ส่งใบจองทางอีเมลแล้ว (${receiptEmail.to})`;
+      }
+    }
+
     saveStore(store);
-    res.json({ order, rajaSlots: enrichRajaSlotsForAdmin() });
+    res.json({ order, rajaSlots: enrichRajaSlotsForAdmin(), receiptEmail });
+  });
+
+  // 9b. Re-send the reservation certificate by email (approved orders only)
+  app.post('/api/admin/orders/:id/send-receipt', requireAdmin, async (req, res) => {
+    const order = store.orders.find((o) => o.id === req.params.id);
+    if (!order) {
+      res.status(404).json({ error: 'ไม่พบรายการคำสั่งจอง' });
+      return;
+    }
+    if (order.paymentStatus !== 'verified_paid') {
+      res.status(409).json({ error: 'ส่งใบจองได้หลังยืนยันการชำระเงินแล้วเท่านั้น' });
+      return;
+    }
+    const email = String(req.body?.email ?? '').trim();
+    if (email) order.customerEmail = email.slice(0, 120);
+    const receiptEmail = await sendReceiptEmail(order, store.siteConfig);
+    if (receiptEmail.sent) order.receiptEmailedAt = new Date().toISOString();
+    saveStore(store);
+    res.json({ order, receiptEmail });
+  });
+
+  // 9c. Sales switch: staff can pause and resume reservations without a redeploy
+  app.patch('/api/admin/sales', requireAdmin, (req, res) => {
+    const open = req.body?.open;
+    if (typeof open !== 'boolean') {
+      res.status(400).json({ error: 'ระบุสถานะเปิด/ปิดการขายไม่ถูกต้อง' });
+      return;
+    }
+    store.siteConfig = { ...store.siteConfig, salesOpen: open };
+    saveStore(store);
+    res.json({ salesOpen: open, siteConfig: store.siteConfig });
   });
 
   // 10. Admin Content & Site Configuration Management

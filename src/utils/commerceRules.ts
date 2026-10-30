@@ -411,6 +411,8 @@ export interface CheckoutFormInput {
   customerName: string;
   organization?: string;
   customerPhone: string;
+  /** Checked only when provided (online checkout always sends it; the receipt is emailed there). */
+  customerEmail?: string;
   deliveryMethod?: 'shipping' | 'pickup_bpp';
   shippingAddress?: string;
   postalCode?: string;
@@ -439,6 +441,13 @@ export function validateCheckoutForm(input: CheckoutFormInput): {
   const digitsOnlyPhone = (input.customerPhone || '').replace(/\D/g, '');
   if (digitsOnlyPhone.length < 9 || digitsOnlyPhone.length > 10) {
     fieldErrors.customerPhone = 'กรุณาระบุหมายเลขโทรศัพท์ 9–10 หลักที่ติดต่อได้';
+  }
+
+  if (input.customerEmail !== undefined) {
+    const email = input.customerEmail.trim();
+    if (!/^[^s@]+@[^s@]+.[^s@]{2,}$/.test(email) || email.length > 120) {
+      fieldErrors.customerEmail = 'กรุณาระบุอีเมลให้ถูกต้อง (ใช้ส่งใบจองหลังเจ้าหน้าที่ตรวจสอบสลิป)';
+    }
   }
 
   if (input.deliveryMethod === 'shipping') {

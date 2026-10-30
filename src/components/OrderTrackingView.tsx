@@ -3,6 +3,7 @@ import {
   AlertCircle,
   Clock,
   Package,
+  Printer,
   Search,
   ShieldCheck,
   Truck,
@@ -15,18 +16,29 @@ import {
 } from '../types';
 import { ThaiCornerBrackets } from './SacredArtwork';
 import { PaymentPanel } from './PaymentPanel';
-import { PaymentChannelConfig } from '../types';
+import { ReservationCertificate } from './ReservationCertificate';
+import { PaymentChannelConfig, SiteConfig } from '../types';
 
 interface OrderTrackingViewProps {
   initialOrderNumber?: string;
   paymentChannels?: PaymentChannelConfig;
+  siteConfig?: SiteConfig;
 }
 
 export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   initialOrderNumber = '',
   paymentChannels,
+  siteConfig,
 }) => {
   const [orderNumber, setOrderNumber] = useState(initialOrderNumber);
+
+  // Print only the certificate, not the rest of the tracking page.
+  const printCertificate = () => {
+    document.body.classList.add('printing-certificate');
+    const done = () => document.body.classList.remove('printing-certificate');
+    window.addEventListener('afterprint', done, { once: true });
+    window.print();
+  };
   const [phoneVerify, setPhoneVerify] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -290,6 +302,26 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                 channels={paymentChannels}
                 onOrderUpdated={(o) => setTrackedOrder(o)}
               />
+            )}
+
+            {/* The certificate is only issued once staff have approved the payment slip */}
+            {siteConfig && trackedOrder.paymentStatus === 'verified_paid' && (
+              <div className="relative z-10 space-y-3">
+                <div className="no-print flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-bold text-[#FCE694]">
+                    ใบจองของท่าน — เจ้าหน้าที่ตรวจสอบการชำระเงินแล้ว
+                  </p>
+                  <button
+                    type="button"
+                    onClick={printCertificate}
+                    className="px-5 py-2.5 rounded-xl btn-sacred-gold font-bold text-xs sm:text-sm inline-flex items-center gap-2"
+                  >
+                    <Printer className="w-4 h-4" />
+                    พิมพ์ใบจอง / บันทึกเป็น PDF
+                  </button>
+                </div>
+                <ReservationCertificate order={trackedOrder} siteConfig={siteConfig} />
+              </div>
             )}
 
             {/* Status History Log */}

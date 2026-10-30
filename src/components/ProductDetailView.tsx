@@ -696,7 +696,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
           {[
             { icon: Truck, label: 'จัดส่งทั่วประเทศ' },
             { icon: FileCheck2, label: 'ออกเลขที่ใบจองอัตโนมัติ' },
-            { icon: PackageCheck, label: 'พิมพ์ใบจอง / PDF ได้ทันที' },
+            { icon: PackageCheck, label: 'รับใบจองทางอีเมลหลังตรวจสลิป' },
             { icon: Headphones, label: 'ทีมงานดูแล' },
           ].map((item, i) => {
             const Icon = item.icon;

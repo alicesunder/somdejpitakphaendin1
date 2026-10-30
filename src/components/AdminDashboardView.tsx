@@ -9,7 +9,9 @@ import {
   Grid,
   Lock,
   LogOut,
+  Mail,
   Package,
+  Power,
   Plus,
   RotateCcw,
   Settings,
@@ -58,6 +60,8 @@ interface DashboardPayload {
   rajaSlots: RajaSetSlot[];
   news: NewsArticle[];
   siteConfig: SiteConfig;
+  /** Whether SMTP is set up, i.e. receipts can be emailed */
+  mailConfigured?: boolean;
   inquiries: ContactInquiry[];
 }
 
@@ -136,9 +140,75 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   }, [adminToken]);
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, ms = 3500) => {
     setStatusBanner(msg);
-    setTimeout(() => setStatusBanner(null), 3500);
+    setTimeout(() => setStatusBanner(null), ms);
+  };
+
+  type ReceiptEmail = { sent: boolean; to?: string; reason?: string } | null;
+  const describeReceiptEmail = (r: ReceiptEmail): string => {
+    if (!r) return '';
+    if (r.sent) return ` · ส่งใบจองไปที่ ${r.to} แล้ว`;
+    if (r.reason === 'no_email') return ' · ใบจองนี้ไม่มีอีเมลผู้ซื้อ จึงไม่ได้ส่งใบจอง';
+    if (r.reason === 'not_configured') return ' · ยังไม่ได้ตั้งค่าระบบอีเมล จึงยังไม่ได้ส่งใบจอง';
+    return ' · ส่งอีเมลใบจองไม่สำเร็จ กดส่งใหม่ได้ในหน้ารายละเอียดใบจอง';
+  };
+
+  const [salesBusy, setSalesBusy] = useState(false);
+  const handleToggleSales = async () => {
+    if (!adminToken || !dashboardData || salesBusy) return;
+    const next = dashboardData.siteConfig.salesOpen === false;
+    const question = next
+      ? 'เปิดการขายพระ? ลูกค้าจะเริ่มจองและเลือกหมายเลขได้ทันที'
+      : 'ปิดการขายพระชั่วคราว? ลูกค้าจะจองหรือเลือกหมายเลขใหม่ไม่ได้ (ใบจองเดิมยังแนบสลิปได้ตามปกติ)';
+    if (!window.confirm(question)) return;
+    setSalesBusy(true);
+    try {
+      const res = await fetch('/api/admin/sales', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ open: next }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        showToast((data && data.error) || 'เปลี่ยนสถานะการขายไม่สำเร็จ กรุณาลองอีกครั้ง', 6000);
+        return;
+      }
+      await fetchDashboard(adminToken);
+      onStoreUpdated();
+      showToast(next ? 'เปิดการขายแล้ว — หน้าร้านจะอัปเดตภายในประมาณ 1–2 นาที' : 'ปิดการขายแล้ว — ระบบหยุดรับจองใหม่ทันที', 6000);
+    } catch {
+      showToast('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ', 6000);
+    } finally {
+      setSalesBusy(false);
+    }
+  };
+
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const handleResendReceipt = async () => {
+    if (!adminToken || !selectedOrder || receiptBusy) return;
+    const email = window.prompt('ส่งใบจองไปที่อีเมล', selectedOrder.customerEmail || '');
+    if (email === null) return;
+    setReceiptBusy(true);
+    try {
+      const res = await fetch(`/api/admin/orders/${selectedOrder.id}/send-receipt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        showToast((data && data.error) || 'ส่งใบจองไม่สำเร็จ', 6000);
+        return;
+      }
+      if (data.order) setSelectedOrder(data.order);
+      await fetchDashboard(adminToken);
+      showToast(`ใบจอง ${selectedOrder.orderNumber}${describeReceiptEmail(data.receiptEmail)}`, 7000);
+    } catch {
+      showToast('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ', 6000);
+    } finally {
+      setReceiptBusy(false);
+    }
   };
 
   const downloadCsvFile = (csvContent: string, filename: string) => {
@@ -341,11 +411,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     });
 
     if (res.ok) {
+      const data = await res.json().catch(() => null);
+      const emailNote = describeReceiptEmail(data?.receiptEmail ?? null);
       setSelectedOrder(null);
       await fetchDashboard(adminToken);
       onStoreUpdated();
       showToast(
-        `อัปเดตสถานะใบจอง ${selectedOrder.orderNumber} เรียบร้อยแล้ว`
+        `อัปเดตสถานะใบจอง ${selectedOrder.orderNumber} เรียบร้อยแล้ว${emailNote}`,
+        emailNote ? 8000 : 3500,
       );
     }
   };
@@ -537,6 +610,62 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         >
           <CheckCircle2 className="w-4 h-4 text-[#8A6D2F] shrink-0" />
           <span>{statusBanner}</span>
+        </div>
+      )}
+
+      {dashboardData && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div
+            className={`rounded-2xl border-2 p-5 flex flex-wrap items-center justify-between gap-4 ${
+              dashboardData.siteConfig.salesOpen === false
+                ? 'border-red-300 bg-red-50'
+                : 'border-emerald-300 bg-emerald-50'
+            }`}
+          >
+            <div>
+              <p className="text-xs font-semibold text-[#77717C]">สถานะการขายพระ (หน้าร้าน)</p>
+              <p
+                className={`text-lg font-bold ${
+                  dashboardData.siteConfig.salesOpen === false ? 'text-red-800' : 'text-emerald-800'
+                }`}
+              >
+                {dashboardData.siteConfig.salesOpen === false ? 'ปิดรับจองชั่วคราว' : 'เปิดรับจองอยู่'}
+              </p>
+              <p className="text-[11px] text-[#77717C]">ใบจองเดิมยังแนบสลิปและติดตามสถานะได้ตามปกติ</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleSales}
+              disabled={salesBusy}
+              aria-pressed={dashboardData.siteConfig.salesOpen !== false}
+              className={`min-h-[48px] px-5 rounded-xl text-sm font-bold text-white inline-flex items-center gap-2 disabled:opacity-60 ${
+                dashboardData.siteConfig.salesOpen === false
+                  ? 'bg-emerald-700 hover:bg-emerald-800'
+                  : 'bg-red-700 hover:bg-red-800'
+              }`}
+            >
+              <Power className="w-4 h-4" />
+              {salesBusy ? 'กำลังบันทึก...' : dashboardData.siteConfig.salesOpen === false ? 'เปิดการขาย' : 'ปิดการขาย'}
+            </button>
+          </div>
+
+          <div
+            className={`rounded-2xl border p-5 flex items-start gap-3 ${
+              dashboardData.mailConfigured ? 'border-[#E8E2D5] bg-white' : 'border-amber-300 bg-amber-50'
+            }`}
+          >
+            <Mail className="w-5 h-5 shrink-0 text-[#8A6D2F] mt-0.5" />
+            <div className="text-xs text-[#29222E] space-y-1">
+              <p className="font-bold text-sm text-[#14100A]">ส่งใบจองทางอีเมล</p>
+              {dashboardData.mailConfigured ? (
+                <p>เมื่อกด “สลิปถูกต้อง ยืนยันรับชำระ” แล้วบันทึก ระบบจะส่งใบจองไปที่อีเมลผู้ซื้อให้อัตโนมัติ</p>
+              ) : (
+                <p>
+                  ยังไม่ได้ตั้งค่าบัญชีอีเมลผู้ส่ง ระบบจึงยังไม่ส่งใบจองทางอีเมล (ผู้ซื้อยังพิมพ์ใบจองได้ที่หน้า “ตรวจสอบสถานะ”)
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -970,7 +1099,25 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       <summary className="font-bold text-[#14100A] cursor-pointer min-h-[32px] flex items-center">รายละเอียดผู้ซื้อและรายการทั้งหมด</summary>
                       <div className="mt-2 space-y-1.5 text-[#29222E]">
                         <p><strong>วันที่จอง:</strong> {new Date(selectedOrder.createdAt).toLocaleString('th-TH')}{selectedOrder.salesChannel === 'admin' ? ' · เจ้าหน้าที่สร้างให้' : ' · จองผ่านเว็บไซต์'}</p>
-                        <p><strong>อีเมล:</strong> {selectedOrder.customerEmail || '-'}</p>
+                        <p>
+                          <strong>อีเมล:</strong> {selectedOrder.customerEmail || '-'}
+                          {selectedOrder.receiptEmailedAt && (
+                            <span className="text-emerald-700">
+                              {' '}· ส่งใบจองแล้วเมื่อ {new Date(selectedOrder.receiptEmailedAt).toLocaleString('th-TH')}
+                            </span>
+                          )}
+                        </p>
+                        {selectedOrder.paymentStatus === 'verified_paid' && (
+                          <button
+                            type="button"
+                            onClick={handleResendReceipt}
+                            disabled={receiptBusy}
+                            className="mt-1 px-3 py-2 min-h-[40px] rounded-lg border border-[#C9A45C] bg-[#FFF9EA] text-[#14100A] text-xs font-bold inline-flex items-center gap-1.5 disabled:opacity-60"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            {receiptBusy ? 'กำลังส่ง...' : selectedOrder.receiptEmailedAt ? 'ส่งใบจองทางอีเมลอีกครั้ง' : 'ส่งใบจองทางอีเมล'}
+                          </button>
+                        )}
                         <p><strong>รหัสไปรษณีย์:</strong> {selectedOrder.postalCode || '-'}</p>
                         <p>
                           <strong>ช่องทางชำระ:</strong>{' '}

@@ -117,14 +117,15 @@ export const initialSiteConfig: SiteConfig = {
   standardShippingFee: 0,
   paymentChannels: {
     enableBankTransfer: true,
-    bankName: 'ธนาคารกรุงไทย / กรุงเทพ / กสิกรไทย / ไทยพาณิชย์',
-    accountName: 'กองทุนวัตถุมงคล ๗๕ ปี ตชด.',
-    accountNumber: '098-0-75999-9',
-    enablePromptPay: true,
-    promptPayId: '0994000759999',
+    bankName: 'บมจ.ธนาคารกรุงไทย',
+    accountName: 'เงินทุนสร้างพระเก่า',
+    accountNumber: '0341427632',
+    // No PromptPay ID for this account yet: transfers go to the Krung Thai account only.
+    enablePromptPay: false,
+    promptPayId: '',
   },
   privacyPolicySummary:
-    'ระบบจัดเก็บเฉพาะชื่อ หน่วยงาน และหมายเลขโทรศัพท์เพื่อใช้ในการออกใบจองวัตถุมงคลและตรวจสอบสถานะเท่านั้น',
+    'ระบบจัดเก็บเฉพาะชื่อ หน่วยงาน หมายเลขโทรศัพท์ และอีเมลเพื่อใช้ในการออกใบจองวัตถุมงคลและตรวจสอบสถานะเท่านั้น',
   termsSummary:
     'วัตถุมงคลสมเด็จพิทักษ์แผ่นดิน ๗๕ ปี ตชด. ทุกรายการผ่านการตรวจสอบความสมบูรณ์พร้อมกล่องเดิมและบัตรรับรองก่อนส่งมอบ',
 };
