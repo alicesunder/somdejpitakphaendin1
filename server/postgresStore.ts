@@ -32,6 +32,9 @@ interface Seed {
 
 type Store = Record<string, any>;
 
+// Schema holding the store's tables (a scratch copy can be used for load tests).
+const S = /^[a-z_]+$/.test(process.env.BPP_SCHEMA || '') ? process.env.BPP_SCHEMA! : 'bpp';
+
 class ConflictError extends Error {
   conflict = true;
 }
@@ -92,7 +95,7 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
   const json = (v: unknown) => JSON.stringify(v ?? null);
 
   async function ensureSeeded(): Promise<void> {
-    const [{ n }] = (await getPool().query('select count(*)::int as n from bpp.docs')).rows;
+    const [{ n }] = (await getPool().query(`select count(*)::int as n from ${S}.docs`)).rows;
     if (n >= DOCS.length) return;
 
     const legacy = importLegacy ? await importLegacy() : null;
@@ -104,7 +107,7 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
         const old = legacy?.docs[name];
         const value = old && old.value !== undefined && old.value !== null ? old.value : s[name];
         await c.query(
-          'insert into bpp.docs (name, rev, value) values ($1, $2, $3::jsonb) on conflict (name) do nothing',
+          `insert into ${S}.docs (name, rev, value) values ($1, $2, $3::jsonb) on conflict (name) do nothing`,
           [name, old?.rev ?? 1, json(value)],
         );
       }
@@ -113,14 +116,14 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
         for (const item of legacy[col]) {
           if (!item?.id) continue;
           await c.query(
-            `insert into bpp.${col} (id, created_at, data) values ($1, $2, $3::jsonb) on conflict (id) do nothing`,
+            `insert into ${S}.${col} (id, created_at, data) values ($1, $2, $3::jsonb) on conflict (id) do nothing`,
             [item.id, String(item.createdAt ?? ''), json(item)],
           );
         }
       }
       for (const slip of legacy.slips) {
         await c.query(
-          'insert into bpp.slips (order_id, data) values ($1, $2::jsonb) on conflict (order_id) do nothing',
+          `insert into ${S}.slips (order_id, data) values ($1, $2::jsonb) on conflict (order_id) do nothing`,
           [slip.orderId, json(slip.data)],
         );
       }
@@ -146,7 +149,7 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
     await ready;
 
     const p = getPool();
-    const rows = (await p.query('select name, rev, value from bpp.docs')).rows;
+    const rows = (await p.query(`select name, rev, value from ${S}.docs`)).rows;
     const byName = new Map(rows.map((r) => [r.name as string, r]));
     for (const name of DOCS) {
       const row = byName.get(name);
@@ -161,7 +164,7 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
       store[c] = [];
     }
     for (const c of cols) {
-      const items = (await p.query(`select data from bpp.${c} order by created_at desc`)).rows.map((r) => r.data);
+      const items = (await p.query(`select data from ${S}.${c} order by created_at desc`)).rows.map((r) => r.data);
       store[c] = items;
       colSnap[c] = new Map(items.map((i: any) => [i.id, JSON.stringify(i)]));
       colLoaded.add(c);
@@ -191,7 +194,7 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
     syncedAt = 0;
     await inTx(async (c) => {
       for (const name of changedDocs) {
-        const r = await c.query('update bpp.docs set value = $1::jsonb, rev = rev + 1 where name = $2 and rev = $3', [
+        const r = await c.query(`update ${S}.docs set value = $1::jsonb, rev = rev + 1 where name = $2 and rev = $3`, [
           json(store[name]),
           name,
           docRev[name] ?? 0,
@@ -200,12 +203,12 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
       }
       for (const w of colWrites) {
         await c.query(
-          `insert into bpp.${w.col} (id, created_at, data) values ($1, $2, $3::jsonb)
+          `insert into ${S}.${w.col} (id, created_at, data) values ($1, $2, $3::jsonb)
            on conflict (id) do update set created_at = excluded.created_at, data = excluded.data`,
           [w.item.id, String(w.item.createdAt ?? ''), json(w.item)],
         );
       }
-      for (const x of colDeletes) await c.query(`delete from bpp.${x.col} where id = $1`, [x.id]);
+      for (const x of colDeletes) await c.query(`delete from ${S}.${x.col} where id = $1`, [x.id]);
     });
 
     for (const name of changedDocs) {
@@ -220,16 +223,16 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
   // Slip images are only read when someone opens a slip, never with the order list.
   async function saveSlip(orderId: string, rec: Record<string, unknown>): Promise<void> {
     await getPool().query(
-      `insert into bpp.slips (order_id, data) values ($1, $2::jsonb)
+      `insert into ${S}.slips (order_id, data) values ($1, $2::jsonb)
        on conflict (order_id) do update set data = excluded.data, updated_at = now()`,
       [orderId, json(rec)],
     );
   }
   async function deleteSlip(orderId: string): Promise<void> {
-    await getPool().query('delete from bpp.slips where order_id = $1', [orderId]);
+    await getPool().query(`delete from ${S}.slips where order_id = $1`, [orderId]);
   }
   async function getSlip(orderId: string): Promise<Record<string, any> | null> {
-    const rows = (await getPool().query('select data from bpp.slips where order_id = $1', [orderId])).rows;
+    const rows = (await getPool().query(`select data from ${S}.slips where order_id = $1`, [orderId])).rows;
     return rows.length ? rows[0].data : null;
   }
 
@@ -241,7 +244,7 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
     const p = getPool();
     const rows = (
       await p.query(
-        `insert into bpp.rate_limits as r (key, count, window_start) values ($1, $3, now())
+        `insert into ${S}.rate_limits as r (key, count, window_start) values ($1, $3, now())
          on conflict (key) do update set
            count = case when r.window_start < now() - make_interval(secs => $2::float8) then $3 else r.count + $3 end,
            window_start = case when r.window_start < now() - make_interval(secs => $2::float8) then now() else r.window_start end
@@ -250,7 +253,7 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
       )
     ).rows;
     if (Math.random() < 0.01) {
-      p.query("delete from bpp.rate_limits where window_start < now() - interval '1 day'").catch(() => {});
+      p.query(`delete from ${S}.rate_limits where window_start < now() - interval '1 day'`).catch(() => {});
     }
     return rows[0].count;
   }
@@ -259,8 +262,8 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
   const visits: VisitStore = {
     async record(vid) {
       await getPool().query(
-        `insert into bpp.visits (day, vid) values (${BKK_DAY}, $1)
-         on conflict (day, vid) do update set views = bpp.visits.views + 1`,
+        `insert into ${S}.visits (day, vid) values (${BKK_DAY}, $1)
+         on conflict (day, vid) do update set views = ${S}.visits.views + 1`,
         [vid],
       );
     },
@@ -269,16 +272,16 @@ export function createPostgresStore(seed: () => Seed, importLegacy?: () => Promi
       const [sum] = (
         await p.query(
           `select
-             (select count(*) from bpp.visits where day = ${BKK_DAY})::int as today_visitors,
-             (select coalesce(sum(views), 0) from bpp.visits where day = ${BKK_DAY})::int as today_views,
-             (select count(distinct vid) from bpp.visits)::int as total_visitors,
-             (select coalesce(sum(views), 0) from bpp.visits)::int as total_views`,
+             (select count(*) from ${S}.visits where day = ${BKK_DAY})::int as today_visitors,
+             (select coalesce(sum(views), 0) from ${S}.visits where day = ${BKK_DAY})::int as today_views,
+             (select count(distinct vid) from ${S}.visits)::int as total_visitors,
+             (select coalesce(sum(views), 0) from ${S}.visits)::int as total_views`,
         )
       ).rows;
       const days = (
         await p.query(
           `select to_char(day, 'YYYY-MM-DD') as day, count(*)::int as visitors, sum(views)::int as views
-           from bpp.visits where day > ${BKK_DAY} - 14 group by day`,
+           from ${S}.visits where day > ${BKK_DAY} - 14 group by day`,
         )
       ).rows;
       return {

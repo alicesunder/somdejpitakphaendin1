@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { AngleType, SpecimenStyle } from '../types';
 
 const REF_IMAGE_PATH =
-  '/assets/aistudio/_____________________.____________a3ca9b6b.png';
+  '/assets/aistudio/_____________________.____________a3ca9b6b.webp';
 
 export const NEW_HERO_BG_PATH =
-  '/assets/aistudio/_________________________0c5d9010.png';
+  '/assets/aistudio/_________________________0c5d9010.webp';
 
 export const OFFICIAL_LOGO_PATH =
-  '/assets/aistudio/____________________________13__3ac81af0.png';
+  '/assets/aistudio/____________________________13__3ac81af0.webp';
 
 export const OFFICIAL_BROCHURE_PDF_PATH =
   '/assets/aistudio/______4_____1__e43ec0fe.pdf';
@@ -545,7 +545,7 @@ export const CeremonySplitBannerArt: React.FC<{
 };
 
 export const MISSION_BANNER_IMAGE_PATH =
-  '/assets/aistudio/859676099_1412789481029434_7851781256536796607_n_2bd4dc26.jpg';
+  '/assets/aistudio/859676099_1412789481029434_7851781256536796607_n_2bd4dc26.webp';
 
 export const MissionSplitBannerArt: React.FC<{ className?: string }> = ({
   className = 'relative',
@@ -578,10 +578,10 @@ export const NewsThumbnailArt: React.FC<{
   className?: string;
 }> = ({ index, posterUrl, alt = 'โปสเตอร์ข่าวสารและพิธีพลีมวลสาร', className = '' }) => {
   const defaultPosters = [
-    '/assets/aistudio/_____________________75_________16__c80228c4.png',
-    '/assets/aistudio/75__________________________________12__3abcf51b.png',
-    '/assets/aistudio/_______________1__26ef883a.png',
-    '/assets/aistudio/somdej_brochure_page_1.png',
+    '/assets/aistudio/_____________________75_________16__c80228c4.webp',
+    '/assets/aistudio/75__________________________________12__3abcf51b.webp',
+    '/assets/aistudio/_______________1__26ef883a.webp',
+    '/assets/aistudio/somdej_brochure_page_1.webp',
   ];
   const resolvedPoster = posterUrl || defaultPosters[index % defaultPosters.length];
 

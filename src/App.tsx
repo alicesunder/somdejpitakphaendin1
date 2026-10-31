@@ -34,6 +34,7 @@ import { Footer } from './components/Footer';
 import { IntroSplash } from './components/IntroSplash';
 import { AmbientLight } from './components/AmbientLight';
 import { useSacredMotion } from './utils/useSacredMotion';
+import { fetchWithConflictRetry } from './utils/conflictRetry';
 import { MobileTabBar } from './components/MobileTabBar';
 import { HomeView } from './components/HomeView';
 import { CatalogView } from './components/CatalogView';
@@ -376,7 +377,7 @@ export default function App() {
         return { success: false, error: closedMessage };
       }
       try {
-        const res = await fetch('/api/raja-slots/toggle', {
+        const res = await fetchWithConflictRetry('/api/raja-slots/toggle', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slotNumber, sessionId }),

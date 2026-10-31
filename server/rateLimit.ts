@@ -53,7 +53,7 @@ const RULES: Rule[] = [
   {
     method: 'POST',
     path: '/orders/track',
-    perIp: 30,
+    perIp: 120,
     windowSec: 10 * 60,
     failKey: orderKey,
     maxFails: 10,
@@ -63,18 +63,19 @@ const RULES: Rule[] = [
   {
     method: 'POST',
     path: '/orders/slip',
-    perIp: 20,
+    perIp: 60,
     windowSec: 10 * 60,
     failKey: orderKey,
     maxFails: 10,
     failWindowSec: 60 * 60,
     failMessage: 'ตรวจสอบใบจองนี้ผิดหลายครั้ง กรุณารอ 1 ชั่วโมง หรือติดต่อเจ้าหน้าที่ทาง LINE',
   },
-  { method: 'POST', path: '/orders', perIp: 30, windowSec: 10 * 60 },
-  { method: 'POST', path: '/raja-slots/toggle', perIp: 120, windowSec: 10 * 60 },
-  { method: 'POST', path: '/inquiries', perIp: 5, windowSec: 10 * 60 },
+  // Whole offices often share one public IP (e.g. staff on the same Wi-Fi), so these are generous.
+  { method: 'POST', path: '/orders', perIp: 120, windowSec: 10 * 60 },
+  { method: 'POST', path: '/raja-slots/toggle', perIp: 400, windowSec: 10 * 60 },
+  { method: 'POST', path: '/inquiries', perIp: 20, windowSec: 10 * 60 },
   // Visit counter: generous (shared mobile IPs), but stops one script from inflating the numbers.
-  { method: 'POST', path: '/visit', perIp: 60, windowSec: 10 * 60 },
+  { method: 'POST', path: '/visit', perIp: 300, windowSec: 10 * 60 },
 ];
 
 /** Mounted on `/api` before the request queue, so refused requests never touch the store. */

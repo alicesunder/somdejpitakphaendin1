@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, Copy, Download, ImagePlus, Loader2, RefreshC
 import { PaymentChannelConfig, PublicTrackedOrder } from '../types';
 import { buildPromptPayPayload } from '../utils/promptpay';
 import { compressSlipImage } from '../utils/slipImage';
+import { fetchWithConflictRetry } from '../utils/conflictRetry';
 
 interface PaymentPanelProps {
   order: PublicTrackedOrder;
@@ -142,7 +143,7 @@ export const PaymentPanel: React.FC<PaymentPanelProps> = ({ order, phoneVerify, 
     setBusy(true);
     setError('');
     try {
-      const res = await fetch('/api/orders/slip', {
+      const res = await fetchWithConflictRetry('/api/orders/slip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

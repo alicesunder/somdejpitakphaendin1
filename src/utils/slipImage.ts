@@ -3,6 +3,8 @@
 
 export const SLIP_MAX_FILE_BYTES = 12 * 1024 * 1024;
 export const SLIP_MAX_DATA_URL_CHARS = 900_000;
+// Target for new slips: ~150 KB keeps the free database from filling up; numbers stay readable.
+const SLIP_TARGET_DATA_URL_CHARS = 220_000;
 
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -23,7 +25,7 @@ function loadImage(file: File): Promise<HTMLImageElement> {
 /** Shrinks a photo to a JPEG data URL under maxChars (defaults suit payment slips). */
 export async function compressSlipImage(
   file: File,
-  { maxSide: startSide = 1400, maxChars = SLIP_MAX_DATA_URL_CHARS }: { maxSide?: number; maxChars?: number } = {},
+  { maxSide: startSide = 1100, maxChars = SLIP_TARGET_DATA_URL_CHARS }: { maxSide?: number; maxChars?: number } = {},
 ): Promise<string> {
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
     throw new Error('รองรับเฉพาะไฟล์ภาพ JPG, PNG หรือ WebP');

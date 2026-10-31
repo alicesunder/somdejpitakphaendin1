@@ -497,12 +497,20 @@ export function createApp() {
               .then(() => originalJson(body))
               .catch((err: any) => {
                 console.error('Persist failed:', err);
-                res.status(err?.conflict ? 409 : 500);
-                originalJson({
-                  error: err?.conflict
-                    ? 'มีผู้ใช้อื่นกำลังแก้ไขข้อมูลพร้อมกัน กรุณาลองอีกครั้ง'
-                    : 'บันทึกข้อมูลไม่สำเร็จ กรุณาลองอีกครั้ง',
-                });
+                // Nothing was saved: let the handler undo side effects (e.g. the slip it stored).
+                const undo = res.locals.onPersistFail as (() => Promise<void>) | undefined;
+                Promise.resolve(undo?.())
+                  .catch((e) => console.warn('Persist-fail cleanup failed:', e?.message || e))
+                  .finally(() => {
+                    res.status(err?.conflict ? 409 : 500);
+                    originalJson({
+                      error: err?.conflict
+                        ? 'มีผู้ใช้อื่นกำลังแก้ไขข้อมูลพร้อมกัน กรุณาลองอีกครั้ง'
+                        : 'บันทึกข้อมูลไม่สำเร็จ กรุณาลองอีกครั้ง',
+                      // Clients may safely resend a request that failed this way.
+                      conflict: Boolean(err?.conflict),
+                    });
+                  });
               });
             return res;
           }) as typeof res.json;
@@ -781,6 +789,8 @@ export function createApp() {
 
     try {
       await writeSlip({ orderId, orderNumber, dataUrl: slipDataUrl, uploadedAt: nowIso });
+      // If the order itself is not saved (e.g. someone else booked at the same moment), drop the slip.
+      res.locals.onPersistFail = () => removeSlip(orderId);
     } catch (err) {
       console.error('Slip save failed:', err);
       res.status(500).json({ error: 'บันทึกสลิปไม่สำเร็จ กรุณาลองกดสั่งจองอีกครั้ง' });

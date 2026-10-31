@@ -34,6 +34,7 @@ import {
 } from '../utils/commerceRules';
 import { compressSlipImage } from '../utils/slipImage';
 import { OrderCelebration } from './OrderCelebration';
+import { fetchWithConflictRetry } from '../utils/conflictRetry';
 import { SpecimenPlate } from './SacredArtwork';
 import { RajaNumberGridModal } from './RajaNumberGridModal';
 import LineContact from './LineContact';
@@ -207,7 +208,8 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
     setSubmitting(true);
 
     try {
-      const response = await fetch('/api/orders', {
+      // Same idempotency key on every retry, so a booking can never be created twice.
+      const response = await fetchWithConflictRetry('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

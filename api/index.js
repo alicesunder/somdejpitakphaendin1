@@ -145,25 +145,25 @@ function buildStandardItem(params) {
         angle: "front",
         label: `\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E19\u0E49\u0E32 (${params.moldType})`,
         caption: `\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E19\u0E49\u0E32 ${params.name} (${params.code})`,
-        imageUrl: `/assets/aistudio/${asset.prefix}_front.png`
+        imageUrl: `/assets/aistudio/${asset.prefix}_front.webp`
       },
       {
         angle: "back",
         label: "\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E25\u0E31\u0E07 (\u0E15\u0E23\u0E32\u0E2D\u0E32\u0E23\u0E4C\u0E21 \u0E15\u0E0A\u0E14.)",
         caption: `\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E25\u0E31\u0E07\u0E1B\u0E23\u0E30\u0E17\u0E31\u0E1A\u0E15\u0E23\u0E32\u0E2D\u0E32\u0E23\u0E4C\u0E21 \u0E15\u0E0A\u0E14. \u0E41\u0E25\u0E30 \u0E57\u0E55 \u0E1B\u0E35 \u0E15\u0E0A\u0E14. (${params.code})`,
-        imageUrl: `/assets/aistudio/${asset.prefix}_back.png`
+        imageUrl: `/assets/aistudio/${asset.prefix}_back.webp`
       },
       {
         angle: "edge",
         label: "\u0E04\u0E39\u0E48\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E19\u0E49\u0E32\u2013\u0E2B\u0E25\u0E31\u0E07",
         caption: `\u0E20\u0E32\u0E1E\u0E04\u0E39\u0E48\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E41\u0E25\u0E30\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E25\u0E31\u0E07 ${params.name}`,
-        imageUrl: `/assets/aistudio/${asset.prefix}_pair.png`
+        imageUrl: `/assets/aistudio/${asset.prefix}_pair.webp`
       },
       {
         angle: "box",
         label: "\u0E40\u0E1B\u0E23\u0E35\u0E22\u0E1A\u0E40\u0E17\u0E35\u0E22\u0E1A \u0E52 \u0E1E\u0E34\u0E21\u0E1E\u0E4C",
         caption: `\u0E40\u0E1B\u0E23\u0E35\u0E22\u0E1A\u0E40\u0E17\u0E35\u0E22\u0E1A\u0E02\u0E19\u0E32\u0E14 \u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E34\u0E22\u0E21 \u0E41\u0E25\u0E30 \u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E04\u0E30\u0E41\u0E19\u0E19 \u0E08\u0E32\u0E01\u0E43\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E17\u0E32\u0E07\u0E01\u0E32\u0E23`,
-        imageUrl: `/assets/aistudio/${asset.prefix}_full.png`
+        imageUrl: `/assets/aistudio/${asset.prefix}_full.webp`
       }
     ],
     createdAt: params.createdAt
@@ -223,25 +223,25 @@ var initialProducts = [
         angle: "front",
         label: "\u0E20\u0E32\u0E1E\u0E23\u0E27\u0E21\u0E0A\u0E38\u0E14 20 \u0E2D\u0E07\u0E04\u0E4C",
         caption: "\u0E0A1 \u0E0A\u0E38\u0E14\u0E17\u0E2D\u0E07\u0E04\u0E33\u0E43\u0E2B\u0E0D\u0E48\u0E23\u0E32\u0E0A\u0E32\u0E24\u0E01\u0E29\u0E4C \u0E23\u0E27\u0E21 20 \u0E2D\u0E07\u0E04\u0E4C \u0E04\u0E23\u0E1A\u0E17\u0E31\u0E49\u0E07\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E34\u0E22\u0E21\u0E41\u0E25\u0E30\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E04\u0E30\u0E41\u0E19\u0E19",
-        imageUrl: "/assets/aistudio/set_01_hero.png"
+        imageUrl: "/assets/aistudio/set_01_hero.webp"
       },
       {
         angle: "back",
         label: "\u0E0A\u0E38\u0E14\u0E40\u0E19\u0E37\u0E49\u0E2D\u0E42\u0E25\u0E2B\u0E30 14 \u0E2D\u0E07\u0E04\u0E4C",
         caption: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E34\u0E22\u0E21 (\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E43\u0E2B\u0E0D\u0E48) 7 \u0E2D\u0E07\u0E04\u0E4C \u0E41\u0E25\u0E30\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E04\u0E30\u0E41\u0E19\u0E19 (\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E40\u0E25\u0E47\u0E01) 7 \u0E2D\u0E07\u0E04\u0E4C \u0E40\u0E19\u0E37\u0E49\u0E2D\u0E17\u0E2D\u0E07\u0E04\u0E33\u0E16\u0E36\u0E07\u0E40\u0E19\u0E37\u0E49\u0E2D\u0E17\u0E2D\u0E07\u0E41\u0E14\u0E07",
-        imageUrl: "/assets/aistudio/set_01_metal_large.png"
+        imageUrl: "/assets/aistudio/set_01_metal_large.webp"
       },
       {
         angle: "edge",
         label: "\u0E0A\u0E38\u0E14\u0E40\u0E19\u0E37\u0E49\u0E2D\u0E1C\u0E07 & \u0E2A\u0E21\u0E19\u0E32\u0E04\u0E38\u0E13 100 \u0E2D\u0E07\u0E04\u0E4C",
         caption: "\u0E1C\u0E07\u0E1E\u0E38\u0E17\u0E18\u0E04\u0E38\u0E13 \u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E34\u0E22\u0E21 3 \u0E2D\u0E07\u0E04\u0E4C + \u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E04\u0E30\u0E41\u0E19\u0E19 3 \u0E2D\u0E07\u0E04\u0E4C \u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E1E\u0E23\u0E30\u0E1C\u0E07\u0E1E\u0E38\u0E17\u0E18\u0E04\u0E38\u0E13 1 \u0E01\u0E25\u0E48\u0E2D\u0E07 (100 \u0E2D\u0E07\u0E04\u0E4C)",
-        imageUrl: "/assets/aistudio/set_01_powder_and_bonus.png"
+        imageUrl: "/assets/aistudio/set_01_powder_and_bonus.webp"
       },
       {
         angle: "box",
         label: "\u0E43\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E0A\u0E38\u0E14\u0E17\u0E35\u0E48 \u0E51 \u0E09\u0E1A\u0E31\u0E1A\u0E40\u0E15\u0E47\u0E21",
         caption: "\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E43\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25 \u0E0A1 \u0E0A\u0E38\u0E14\u0E17\u0E2D\u0E07\u0E04\u0E33\u0E43\u0E2B\u0E0D\u0E48\u0E23\u0E32\u0E0A\u0E32\u0E24\u0E01\u0E29\u0E4C \u0E1A\u0E39\u0E0A\u0E32 349,999 \u0E1A\u0E32\u0E17",
-        imageUrl: "/assets/aistudio/somdej_brochure_page_2.png"
+        imageUrl: "/assets/aistudio/somdej_brochure_page_2.webp"
       }
     ],
     createdAt: "2026-10-27T12:00:00.000Z"
@@ -295,25 +295,25 @@ var initialProducts = [
         angle: "front",
         label: "\u0E20\u0E32\u0E1E\u0E0A\u0E38\u0E14\u0E22\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07 7 \u0E40\u0E19\u0E37\u0E49\u0E2D",
         caption: "\u0E0A2 \u0E0A\u0E38\u0E14\u0E22\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07 100 \u0E2D\u0E07\u0E04\u0E4C (\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E34\u0E22\u0E21) \u0E41\u0E2A\u0E14\u0E07\u0E2A\u0E31\u0E14\u0E2A\u0E48\u0E27\u0E19\u0E17\u0E31\u0E49\u0E07 7 \u0E40\u0E19\u0E37\u0E49\u0E2D\u0E27\u0E31\u0E2A\u0E14\u0E38\u0E43\u0E19\u0E01\u0E25\u0E48\u0E2D\u0E07",
-        imageUrl: "/assets/aistudio/set_02_hero.png"
+        imageUrl: "/assets/aistudio/set_02_hero.webp"
       },
       {
         angle: "back",
         label: "\u0E15\u0E32\u0E23\u0E32\u0E07\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23 100 \u0E2D\u0E07\u0E04\u0E4C",
         caption: "\u0E23\u0E32\u0E22\u0E25\u0E30\u0E40\u0E2D\u0E35\u0E22\u0E14\u0E08\u0E33\u0E19\u0E27\u0E19\u0E2D\u0E07\u0E04\u0E4C\u0E1E\u0E23\u0E30\u0E41\u0E15\u0E48\u0E25\u0E30\u0E40\u0E19\u0E37\u0E49\u0E2D\u0E20\u0E32\u0E22\u0E43\u0E19\u0E0A\u0E38\u0E14\u0E22\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07 \u0E23\u0E27\u0E21\u0E17\u0E31\u0E49\u0E07\u0E2A\u0E34\u0E49\u0E19 100 \u0E2D\u0E07\u0E04\u0E4C",
-        imageUrl: "/assets/aistudio/set_02_table.png"
+        imageUrl: "/assets/aistudio/set_02_table.webp"
       },
       {
         angle: "edge",
         label: "\u0E02\u0E19\u0E32\u0E14\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E34\u0E22\u0E21\u0E21\u0E32\u0E15\u0E23\u0E10\u0E32\u0E19",
         caption: "\u0E41\u0E1C\u0E19\u0E1C\u0E31\u0E07\u0E02\u0E19\u0E32\u0E14\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E34\u0E22\u0E21 (2.3 \xD7 3.7 \xD7 2.5 \u0E0B\u0E21. \u0E2B\u0E19\u0E32 1 \u0E21\u0E21.) \u0E41\u0E25\u0E30\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E04\u0E30\u0E41\u0E19\u0E19",
-        imageUrl: "/assets/aistudio/somdej_dimensions_chart.png"
+        imageUrl: "/assets/aistudio/somdej_dimensions_chart.webp"
       },
       {
         angle: "box",
         label: "\u0E43\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E0A\u0E38\u0E14\u0E17\u0E35\u0E48 \u0E52 \u0E09\u0E1A\u0E31\u0E1A\u0E40\u0E15\u0E47\u0E21",
         caption: "\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E43\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25 \u0E0A2 \u0E0A\u0E38\u0E14\u0E22\u0E01\u0E01\u0E25\u0E48\u0E2D\u0E07 100 \u0E2D\u0E07\u0E04\u0E4C \u0E1A\u0E39\u0E0A\u0E32 29,999 \u0E1A\u0E32\u0E17",
-        imageUrl: "/assets/aistudio/somdej_brochure_page_3.png"
+        imageUrl: "/assets/aistudio/somdej_brochure_page_3.webp"
       }
     ],
     createdAt: "2026-10-27T11:50:00.000Z"
@@ -362,25 +362,25 @@ var initialProducts = [
         angle: "front",
         label: "\u0E20\u0E32\u0E1E\u0E0A\u0E38\u0E14\u0E01\u0E23\u0E23\u0E21\u0E01\u0E32\u0E23 5 \u0E2D\u0E07\u0E04\u0E4C",
         caption: "\u0E0A3 \u0E0A\u0E38\u0E14\u0E01\u0E23\u0E23\u0E21\u0E01\u0E32\u0E23 5 \u0E2D\u0E07\u0E04\u0E4C (\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E34\u0E22\u0E21) \u0E41\u0E2A\u0E14\u0E07\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E41\u0E25\u0E30\u0E14\u0E49\u0E32\u0E19\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E23\u0E1A\u0E17\u0E31\u0E49\u0E07 5 \u0E40\u0E19\u0E37\u0E49\u0E2D",
-        imageUrl: "/assets/aistudio/set_03_hero.png"
+        imageUrl: "/assets/aistudio/set_03_hero.webp"
       },
       {
         angle: "back",
         label: "\u0E15\u0E32\u0E23\u0E32\u0E07\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23 5 \u0E2D\u0E07\u0E04\u0E4C",
         caption: "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E20\u0E32\u0E22\u0E43\u0E19\u0E0A\u0E38\u0E14\u0E01\u0E23\u0E23\u0E21\u0E01\u0E32\u0E23 5 \u0E2D\u0E07\u0E04\u0E4C (\u0E40\u0E07\u0E34\u0E19, \u0E19\u0E27\u0E30\u0E42\u0E25\u0E2B\u0E30, \u0E17\u0E2D\u0E07\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E07, \u0E17\u0E2D\u0E07\u0E41\u0E14\u0E07, \u0E1C\u0E07\u0E15\u0E30\u0E01\u0E23\u0E38\u0E14\u0E17\u0E2D\u0E07\u0E04\u0E33)",
-        imageUrl: "/assets/aistudio/set_03_table.png"
+        imageUrl: "/assets/aistudio/set_03_table.webp"
       },
       {
         angle: "edge",
         label: "\u0E02\u0E19\u0E32\u0E14\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E34\u0E22\u0E21\u0E21\u0E32\u0E15\u0E23\u0E10\u0E32\u0E19",
         caption: "\u0E02\u0E19\u0E32\u0E14\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E19\u0E34\u0E22\u0E21 \u0E14\u0E49\u0E32\u0E19\u0E1A\u0E19 2.3 \u0E0B\u0E21. \u0E2A\u0E39\u0E07 3.7 \u0E0B\u0E21. \u0E14\u0E49\u0E32\u0E19\u0E25\u0E48\u0E32\u0E07 2.5 \u0E0B\u0E21. \u0E2B\u0E19\u0E32 1 \u0E21\u0E21.",
-        imageUrl: "/assets/aistudio/somdej_dimensions_chart.png"
+        imageUrl: "/assets/aistudio/somdej_dimensions_chart.webp"
       },
       {
         angle: "box",
         label: "\u0E43\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E0A\u0E38\u0E14\u0E17\u0E35\u0E48 \u0E53 \u0E09\u0E1A\u0E31\u0E1A\u0E40\u0E15\u0E47\u0E21",
         caption: "\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E43\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25 \u0E0A3 \u0E0A\u0E38\u0E14\u0E01\u0E23\u0E23\u0E21\u0E01\u0E32\u0E23 5 \u0E2D\u0E07\u0E04\u0E4C \u0E1A\u0E39\u0E0A\u0E32 4,999 \u0E1A\u0E32\u0E17",
-        imageUrl: "/assets/aistudio/somdej_brochure_page_4.png"
+        imageUrl: "/assets/aistudio/somdej_brochure_page_4.webp"
       }
     ],
     createdAt: "2026-10-27T11:40:00.000Z"
@@ -696,7 +696,7 @@ var initialNews = [
     category: "\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E01\u0E32\u0E23\u0E1E\u0E34\u0E18\u0E35\u0E21\u0E2B\u0E32\u0E21\u0E07\u0E04\u0E25",
     publishedAt: "10 \u0E15.\u0E04. 2569",
     sourceReference: "\u0E01\u0E2D\u0E07\u0E1A\u0E31\u0E0D\u0E0A\u0E32\u0E01\u0E32\u0E23\u0E15\u0E33\u0E23\u0E27\u0E08\u0E15\u0E23\u0E30\u0E40\u0E27\u0E19\u0E0A\u0E32\u0E22\u0E41\u0E14\u0E19 \xB7 POLICETV \u0E2A\u0E16\u0E32\u0E19\u0E35\u0E42\u0E17\u0E23\u0E17\u0E31\u0E28\u0E19\u0E4C\u0E2A\u0E33\u0E19\u0E31\u0E01\u0E07\u0E32\u0E19\u0E15\u0E33\u0E23\u0E27\u0E08\u0E41\u0E2B\u0E48\u0E07\u0E0A\u0E32\u0E15\u0E34",
-    posterUrl: "/assets/aistudio/_____________________75_________16__c80228c4.png",
+    posterUrl: "/assets/aistudio/_____________________75_________16__c80228c4.webp",
     eventDate: "\u0E27\u0E31\u0E19\u0E40\u0E2A\u0E32\u0E23\u0E4C\u0E17\u0E35\u0E48 10 \u0E15\u0E38\u0E25\u0E32\u0E04\u0E21 2569",
     eventTime: "\u0E40\u0E27\u0E25\u0E32 09.39 \u0E19.",
     eventLocation: "\u0E13 \u0E27\u0E31\u0E14\u0E2A\u0E27\u0E19\u0E18\u0E23\u0E23\u0E21\u0E1B\u0E35\u0E15\u0E34 \u0E2D\u0E33\u0E40\u0E20\u0E2D\u0E40\u0E21\u0E37\u0E2D\u0E07 \u0E08\u0E31\u0E07\u0E2B\u0E27\u0E31\u0E14\u0E01\u0E32\u0E2C\u0E2A\u0E34\u0E19\u0E18\u0E38\u0E4C",
@@ -716,7 +716,7 @@ var initialNews = [
     category: "\u0E1E\u0E34\u0E18\u0E35\u0E1E\u0E25\u0E35\u0E21\u0E27\u0E25\u0E2A\u0E32\u0E23 \u0E27\u0E32\u0E23\u0E30\u0E17\u0E35\u0E48 2",
     publishedAt: "17 \u0E15.\u0E04. 2569",
     sourceReference: "\u0E01\u0E2D\u0E07\u0E1A\u0E31\u0E0D\u0E0A\u0E32\u0E01\u0E32\u0E23\u0E15\u0E33\u0E23\u0E27\u0E08\u0E15\u0E23\u0E30\u0E40\u0E27\u0E19\u0E0A\u0E32\u0E22\u0E41\u0E14\u0E19 \xB7 \u0E27\u0E31\u0E14\u0E41\u0E2A\u0E07\u0E41\u0E01\u0E49\u0E27\u0E42\u0E1E\u0E18\u0E34\u0E0D\u0E32\u0E13 \u0E08.\u0E40\u0E0A\u0E35\u0E22\u0E07\u0E23\u0E32\u0E22",
-    posterUrl: "/assets/aistudio/75__________________________________12__3abcf51b.png",
+    posterUrl: "/assets/aistudio/75__________________________________12__3abcf51b.webp",
     eventDate: "\u0E27\u0E31\u0E19\u0E40\u0E2A\u0E32\u0E23\u0E4C\u0E17\u0E35\u0E48 17 \u0E15\u0E38\u0E25\u0E32\u0E04\u0E21 2569",
     eventTime: "\u0E40\u0E27\u0E25\u0E32 13:39 \u0E19.",
     eventLocation: "\u0E13 \u0E27\u0E31\u0E14\u0E41\u0E2A\u0E07\u0E41\u0E01\u0E49\u0E27\u0E42\u0E1E\u0E18\u0E34\u0E0D\u0E32\u0E13 \u0E2D\u0E33\u0E40\u0E20\u0E2D\u0E41\u0E21\u0E48\u0E2A\u0E23\u0E27\u0E22 \u0E08\u0E31\u0E07\u0E2B\u0E27\u0E31\u0E14\u0E40\u0E0A\u0E35\u0E22\u0E07\u0E23\u0E32\u0E22",
@@ -735,7 +735,7 @@ var initialNews = [
     category: "\u0E1E\u0E34\u0E18\u0E35\u0E1E\u0E25\u0E35\u0E21\u0E27\u0E25\u0E2A\u0E32\u0E23 \u0E20\u0E32\u0E04\u0E43\u0E15\u0E49",
     publishedAt: "24 \u0E15.\u0E04. 2569",
     sourceReference: "\u0E01\u0E2D\u0E07\u0E1A\u0E31\u0E0D\u0E0A\u0E32\u0E01\u0E32\u0E23\u0E15\u0E33\u0E23\u0E27\u0E08\u0E15\u0E23\u0E30\u0E40\u0E27\u0E19\u0E0A\u0E32\u0E22\u0E41\u0E14\u0E19 \xB7 \u0E27\u0E31\u0E14\u0E21\u0E2B\u0E32\u0E18\u0E32\u0E15\u0E38\u0E27\u0E0A\u0E34\u0E23\u0E21\u0E07\u0E04\u0E25 \u0E1E\u0E23\u0E30\u0E2D\u0E32\u0E23\u0E32\u0E21\u0E2B\u0E25\u0E27\u0E07 \u0E08.\u0E01\u0E23\u0E30\u0E1A\u0E35\u0E48",
-    posterUrl: "/assets/aistudio/_______________1__26ef883a.png",
+    posterUrl: "/assets/aistudio/_______________1__26ef883a.webp",
     eventDate: "\u0E27\u0E31\u0E19\u0E40\u0E2A\u0E32\u0E23\u0E4C\u0E17\u0E35\u0E48 24 \u0E15\u0E38\u0E25\u0E32\u0E04\u0E21 2569",
     eventTime: "\u0E40\u0E27\u0E25\u0E32 09:39 \u0E19.",
     eventLocation: "\u0E13 \u0E2D\u0E38\u0E42\u0E1A\u0E2A\u0E16\u0E2B\u0E25\u0E31\u0E07\u0E40\u0E01\u0E48\u0E32 \u0E27\u0E31\u0E14\u0E21\u0E2B\u0E32\u0E18\u0E32\u0E15\u0E38\u0E27\u0E0A\u0E34\u0E23\u0E21\u0E07\u0E04\u0E25 \u0E1E\u0E23\u0E30\u0E2D\u0E32\u0E23\u0E32\u0E21\u0E2B\u0E25\u0E27\u0E07 \u0E15\u0E33\u0E1A\u0E25\u0E19\u0E32\u0E40\u0E2B\u0E19\u0E37\u0E2D \u0E2D\u0E33\u0E40\u0E20\u0E2D\u0E2D\u0E48\u0E32\u0E27\u0E25\u0E36\u0E01 \u0E08\u0E31\u0E07\u0E2B\u0E27\u0E31\u0E14\u0E01\u0E23\u0E30\u0E1A\u0E35\u0E48",
@@ -754,7 +754,7 @@ var initialNews = [
     category: "\u0E1B\u0E23\u0E30\u0E01\u0E32\u0E28\u0E04\u0E25\u0E31\u0E07\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25",
     publishedAt: "\u0E15\u0E38\u0E25\u0E32\u0E04\u0E21 2569",
     sourceReference: "\u0E01\u0E2D\u0E07\u0E1A\u0E31\u0E0D\u0E0A\u0E32\u0E01\u0E32\u0E23\u0E15\u0E33\u0E23\u0E27\u0E08\u0E15\u0E23\u0E30\u0E40\u0E27\u0E19\u0E0A\u0E32\u0E22\u0E41\u0E14\u0E19",
-    posterUrl: "/assets/aistudio/somdej_brochure_page_1.png",
+    posterUrl: "/assets/aistudio/somdej_brochure_page_1.webp",
     eventDate: "\u0E27\u0E32\u0E23\u0E30\u0E04\u0E23\u0E1A\u0E23\u0E2D\u0E1A 75 \u0E1B\u0E35 \u0E15\u0E0A\u0E14.",
     eventTime: "\u0E40\u0E1B\u0E34\u0E14\u0E08\u0E2D\u0E07\u0E23\u0E48\u0E27\u0E21\u0E1A\u0E38\u0E0D",
     eventLocation: "\u0E01\u0E2D\u0E07\u0E1A\u0E31\u0E0D\u0E0A\u0E32\u0E01\u0E32\u0E23\u0E15\u0E33\u0E23\u0E27\u0E08\u0E15\u0E23\u0E30\u0E40\u0E27\u0E19\u0E0A\u0E32\u0E22\u0E41\u0E14\u0E19",
@@ -1380,6 +1380,7 @@ function memoryVisits() {
 // server/postgresStore.ts
 var DOCS2 = ["siteConfig", "products", "rajaSlots", "news"];
 var COLS2 = ["orders", "inquiries"];
+var S = /^[a-z_]+$/.test(process.env.BPP_SCHEMA || "") ? process.env.BPP_SCHEMA : "bpp";
 var ConflictError2 = class extends Error {
   constructor() {
     super(...arguments);
@@ -1433,7 +1434,7 @@ function createPostgresStore(seed, importLegacy) {
   let ready = null;
   const json = (v) => JSON.stringify(v ?? null);
   async function ensureSeeded() {
-    const [{ n }] = (await getPool().query("select count(*)::int as n from bpp.docs")).rows;
+    const [{ n }] = (await getPool().query(`select count(*)::int as n from ${S}.docs`)).rows;
     if (n >= DOCS2.length) return;
     const legacy = importLegacy ? await importLegacy() : null;
     const s = seed();
@@ -1443,7 +1444,7 @@ function createPostgresStore(seed, importLegacy) {
         const old = legacy?.docs[name];
         const value = old && old.value !== void 0 && old.value !== null ? old.value : s[name];
         await c.query(
-          "insert into bpp.docs (name, rev, value) values ($1, $2, $3::jsonb) on conflict (name) do nothing",
+          `insert into ${S}.docs (name, rev, value) values ($1, $2, $3::jsonb) on conflict (name) do nothing`,
           [name, old?.rev ?? 1, json(value)]
         );
       }
@@ -1452,14 +1453,14 @@ function createPostgresStore(seed, importLegacy) {
         for (const item of legacy[col]) {
           if (!item?.id) continue;
           await c.query(
-            `insert into bpp.${col} (id, created_at, data) values ($1, $2, $3::jsonb) on conflict (id) do nothing`,
+            `insert into ${S}.${col} (id, created_at, data) values ($1, $2, $3::jsonb) on conflict (id) do nothing`,
             [item.id, String(item.createdAt ?? ""), json(item)]
           );
         }
       }
       for (const slip of legacy.slips) {
         await c.query(
-          "insert into bpp.slips (order_id, data) values ($1, $2::jsonb) on conflict (order_id) do nothing",
+          `insert into ${S}.slips (order_id, data) values ($1, $2::jsonb) on conflict (order_id) do nothing`,
           [slip.orderId, json(slip.data)]
         );
       }
@@ -1481,7 +1482,7 @@ function createPostgresStore(seed, importLegacy) {
     }
     await ready;
     const p = getPool();
-    const rows = (await p.query("select name, rev, value from bpp.docs")).rows;
+    const rows = (await p.query(`select name, rev, value from ${S}.docs`)).rows;
     const byName = new Map(rows.map((r) => [r.name, r]));
     for (const name of DOCS2) {
       const row = byName.get(name);
@@ -1495,7 +1496,7 @@ function createPostgresStore(seed, importLegacy) {
       store2[c] = [];
     }
     for (const c of cols) {
-      const items = (await p.query(`select data from bpp.${c} order by created_at desc`)).rows.map((r) => r.data);
+      const items = (await p.query(`select data from ${S}.${c} order by created_at desc`)).rows.map((r) => r.data);
       store2[c] = items;
       colSnap[c] = new Map(items.map((i) => [i.id, JSON.stringify(i)]));
       colLoaded.add(c);
@@ -1522,7 +1523,7 @@ function createPostgresStore(seed, importLegacy) {
     syncedAt = 0;
     await inTx(async (c) => {
       for (const name of changedDocs) {
-        const r = await c.query("update bpp.docs set value = $1::jsonb, rev = rev + 1 where name = $2 and rev = $3", [
+        const r = await c.query(`update ${S}.docs set value = $1::jsonb, rev = rev + 1 where name = $2 and rev = $3`, [
           json(store2[name]),
           name,
           docRev[name] ?? 0
@@ -1531,12 +1532,12 @@ function createPostgresStore(seed, importLegacy) {
       }
       for (const w of colWrites) {
         await c.query(
-          `insert into bpp.${w.col} (id, created_at, data) values ($1, $2, $3::jsonb)
+          `insert into ${S}.${w.col} (id, created_at, data) values ($1, $2, $3::jsonb)
            on conflict (id) do update set created_at = excluded.created_at, data = excluded.data`,
           [w.item.id, String(w.item.createdAt ?? ""), json(w.item)]
         );
       }
-      for (const x of colDeletes) await c.query(`delete from bpp.${x.col} where id = $1`, [x.id]);
+      for (const x of colDeletes) await c.query(`delete from ${S}.${x.col} where id = $1`, [x.id]);
     });
     for (const name of changedDocs) {
       docRev[name] = (docRev[name] ?? 0) + 1;
@@ -1548,22 +1549,22 @@ function createPostgresStore(seed, importLegacy) {
   }
   async function saveSlip(orderId, rec) {
     await getPool().query(
-      `insert into bpp.slips (order_id, data) values ($1, $2::jsonb)
+      `insert into ${S}.slips (order_id, data) values ($1, $2::jsonb)
        on conflict (order_id) do update set data = excluded.data, updated_at = now()`,
       [orderId, json(rec)]
     );
   }
   async function deleteSlip(orderId) {
-    await getPool().query("delete from bpp.slips where order_id = $1", [orderId]);
+    await getPool().query(`delete from ${S}.slips where order_id = $1`, [orderId]);
   }
   async function getSlip(orderId) {
-    const rows = (await getPool().query("select data from bpp.slips where order_id = $1", [orderId])).rows;
+    const rows = (await getPool().query(`select data from ${S}.slips where order_id = $1`, [orderId])).rows;
     return rows.length ? rows[0].data : null;
   }
   async function hit(key, windowSec, inc = 1) {
     const p = getPool();
     const rows = (await p.query(
-      `insert into bpp.rate_limits as r (key, count, window_start) values ($1, $3, now())
+      `insert into ${S}.rate_limits as r (key, count, window_start) values ($1, $3, now())
          on conflict (key) do update set
            count = case when r.window_start < now() - make_interval(secs => $2::float8) then $3 else r.count + $3 end,
            window_start = case when r.window_start < now() - make_interval(secs => $2::float8) then now() else r.window_start end
@@ -1571,7 +1572,7 @@ function createPostgresStore(seed, importLegacy) {
       [key, windowSec, inc]
     )).rows;
     if (Math.random() < 0.01) {
-      p.query("delete from bpp.rate_limits where window_start < now() - interval '1 day'").catch(() => {
+      p.query(`delete from ${S}.rate_limits where window_start < now() - interval '1 day'`).catch(() => {
       });
     }
     return rows[0].count;
@@ -1580,8 +1581,8 @@ function createPostgresStore(seed, importLegacy) {
   const visits = {
     async record(vid) {
       await getPool().query(
-        `insert into bpp.visits (day, vid) values (${BKK_DAY}, $1)
-         on conflict (day, vid) do update set views = bpp.visits.views + 1`,
+        `insert into ${S}.visits (day, vid) values (${BKK_DAY}, $1)
+         on conflict (day, vid) do update set views = ${S}.visits.views + 1`,
         [vid]
       );
     },
@@ -1589,14 +1590,14 @@ function createPostgresStore(seed, importLegacy) {
       const p = getPool();
       const [sum] = (await p.query(
         `select
-             (select count(*) from bpp.visits where day = ${BKK_DAY})::int as today_visitors,
-             (select coalesce(sum(views), 0) from bpp.visits where day = ${BKK_DAY})::int as today_views,
-             (select count(distinct vid) from bpp.visits)::int as total_visitors,
-             (select coalesce(sum(views), 0) from bpp.visits)::int as total_views`
+             (select count(*) from ${S}.visits where day = ${BKK_DAY})::int as today_visitors,
+             (select coalesce(sum(views), 0) from ${S}.visits where day = ${BKK_DAY})::int as today_views,
+             (select count(distinct vid) from ${S}.visits)::int as total_visitors,
+             (select coalesce(sum(views), 0) from ${S}.visits)::int as total_views`
       )).rows;
       const days = (await p.query(
         `select to_char(day, 'YYYY-MM-DD') as day, count(*)::int as visitors, sum(views)::int as views
-           from bpp.visits where day > ${BKK_DAY} - 14 group by day`
+           from ${S}.visits where day > ${BKK_DAY} - 14 group by day`
       )).rows;
       return {
         today: { visitors: sum.today_visitors, views: sum.today_views },
@@ -1637,7 +1638,7 @@ var RULES = [
   {
     method: "POST",
     path: "/orders/track",
-    perIp: 30,
+    perIp: 120,
     windowSec: 10 * 60,
     failKey: orderKey,
     maxFails: 10,
@@ -1647,18 +1648,19 @@ var RULES = [
   {
     method: "POST",
     path: "/orders/slip",
-    perIp: 20,
+    perIp: 60,
     windowSec: 10 * 60,
     failKey: orderKey,
     maxFails: 10,
     failWindowSec: 60 * 60,
     failMessage: "\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E43\u0E1A\u0E08\u0E2D\u0E07\u0E19\u0E35\u0E49\u0E1C\u0E34\u0E14\u0E2B\u0E25\u0E32\u0E22\u0E04\u0E23\u0E31\u0E49\u0E07 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E2D 1 \u0E0A\u0E31\u0E48\u0E27\u0E42\u0E21\u0E07 \u0E2B\u0E23\u0E37\u0E2D\u0E15\u0E34\u0E14\u0E15\u0E48\u0E2D\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E17\u0E32\u0E07 LINE"
   },
-  { method: "POST", path: "/orders", perIp: 30, windowSec: 10 * 60 },
-  { method: "POST", path: "/raja-slots/toggle", perIp: 120, windowSec: 10 * 60 },
-  { method: "POST", path: "/inquiries", perIp: 5, windowSec: 10 * 60 },
+  // Whole offices often share one public IP (e.g. staff on the same Wi-Fi), so these are generous.
+  { method: "POST", path: "/orders", perIp: 120, windowSec: 10 * 60 },
+  { method: "POST", path: "/raja-slots/toggle", perIp: 400, windowSec: 10 * 60 },
+  { method: "POST", path: "/inquiries", perIp: 20, windowSec: 10 * 60 },
   // Visit counter: generous (shared mobile IPs), but stops one script from inflating the numbers.
-  { method: "POST", path: "/visit", perIp: 60, windowSec: 10 * 60 }
+  { method: "POST", path: "/visit", perIp: 300, windowSec: 10 * 60 }
 ];
 function rateLimiter(getHit) {
   return async (req, res, next) => {
@@ -2165,9 +2167,14 @@ function createApp() {
           res.json = ((body) => {
             remoteStore.persist(store).then(() => originalJson(body)).catch((err) => {
               console.error("Persist failed:", err);
-              res.status(err?.conflict ? 409 : 500);
-              originalJson({
-                error: err?.conflict ? "\u0E21\u0E35\u0E1C\u0E39\u0E49\u0E43\u0E0A\u0E49\u0E2D\u0E37\u0E48\u0E19\u0E01\u0E33\u0E25\u0E31\u0E07\u0E41\u0E01\u0E49\u0E44\u0E02\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E01\u0E31\u0E19 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E25\u0E2D\u0E07\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07" : "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E25\u0E2D\u0E07\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07"
+              const undo = res.locals.onPersistFail;
+              Promise.resolve(undo?.()).catch((e) => console.warn("Persist-fail cleanup failed:", e?.message || e)).finally(() => {
+                res.status(err?.conflict ? 409 : 500);
+                originalJson({
+                  error: err?.conflict ? "\u0E21\u0E35\u0E1C\u0E39\u0E49\u0E43\u0E0A\u0E49\u0E2D\u0E37\u0E48\u0E19\u0E01\u0E33\u0E25\u0E31\u0E07\u0E41\u0E01\u0E49\u0E44\u0E02\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E01\u0E31\u0E19 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E25\u0E2D\u0E07\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07" : "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E25\u0E2D\u0E07\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07",
+                  // Clients may safely resend a request that failed this way.
+                  conflict: Boolean(err?.conflict)
+                });
               });
             });
             return res;
@@ -2399,6 +2406,7 @@ function createApp() {
     const orderId = `ord-${now}-${crypto.randomBytes(3).toString("hex")}`;
     try {
       await writeSlip({ orderId, orderNumber, dataUrl: slipDataUrl, uploadedAt: nowIso });
+      res.locals.onPersistFail = () => removeSlip(orderId);
     } catch (err) {
       console.error("Slip save failed:", err);
       res.status(500).json({ error: "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E2A\u0E25\u0E34\u0E1B\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E25\u0E2D\u0E07\u0E01\u0E14\u0E2A\u0E31\u0E48\u0E07\u0E08\u0E2D\u0E07\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07" });
