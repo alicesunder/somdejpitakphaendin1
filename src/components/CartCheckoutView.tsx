@@ -35,6 +35,7 @@ import {
 import { compressSlipImage } from '../utils/slipImage';
 import { OrderCelebration } from './OrderCelebration';
 import { fetchWithConflictRetry } from '../utils/conflictRetry';
+import { drawOrderImage, saveOrderImage } from '../utils/orderImage';
 import { SpecimenPlate } from './SacredArtwork';
 import { RajaNumberGridModal } from './RajaNumberGridModal';
 import LineContact from './LineContact';
@@ -115,6 +116,48 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
   const [idempotencyKey] = useState(
     () => `idem-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
   );
+
+  // A picture of the booking (order number, items, total) for the buyer to keep — saved to their
+  // device automatically once it's drawn, and offered again via the buttons below.
+  const [orderImageBlob, setOrderImageBlob] = useState<Blob | null>(null);
+  const [orderImageUrl, setOrderImageUrl] = useState('');
+  const [autoSaveNote, setAutoSaveNote] = useState('');
+  const autoSavedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!confirmedOrder) return;
+    let cancelled = false;
+    drawOrderImage(confirmedOrder, { siteUrl: window.location.origin, customerEmail: customerEmail.trim() })
+      .then((blob) => {
+        if (cancelled) return;
+        setOrderImageBlob(blob);
+        setOrderImageUrl(URL.createObjectURL(blob));
+        if (!autoSavedRef.current) {
+          autoSavedRef.current = true;
+          // Phones with a share sheet get "บันทึกรูปภาพ" there; everywhere else this is a
+          // normal download, which some browsers only allow right after a user action — if it's
+          // silently blocked, the buyer still has the "บันทึกรูปภาพ" button below.
+          saveOrderImage(blob, confirmedOrder.orderNumber, false)
+            .then(() => !cancelled && setAutoSaveNote('บันทึกรูปคำสั่งจองลงในเครื่องให้แล้ว'))
+            .catch(() => {
+              /* the button below still works */
+            });
+        }
+      })
+      .catch(() => {
+        /* buyer can still read the order number on screen; nothing else to do */
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmedOrder?.orderNumber]);
+
+  useEffect(() => {
+    return () => {
+      if (orderImageUrl) URL.revokeObjectURL(orderImageUrl);
+    };
+  }, [orderImageUrl]);
 
   const autoDateThai = useMemo(() => formatThaiDate(new Date()), []);
 
@@ -322,6 +365,63 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
               </p>
             </div>
           </div>
+
+          <section
+            aria-labelledby="order-image-title"
+            className="no-print rounded-2xl border border-[#C9A45C]/60 bg-[#110D08]/90 p-5 sm:p-6 space-y-3"
+          >
+            <h2 id="order-image-title" className="font-serif-heritage text-lg font-bold text-[#FCE694] flex items-center gap-2">
+              <ImagePlus className="w-5 h-5" />
+              รูปบันทึกคำสั่งจอง
+            </h2>
+            {autoSaveNote && (
+              <p className="text-xs text-emerald-300 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                {autoSaveNote}
+              </p>
+            )}
+            {orderImageUrl ? (
+              <div className="flex flex-col sm:flex-row gap-4 items-start">
+                <img
+                  src={orderImageUrl}
+                  alt={`รูปบันทึกคำสั่งจอง เลขที่ ${confirmedOrder.orderNumber}`}
+                  className="w-40 sm:w-48 rounded-xl border border-[#C9A45C]/50 shadow-lg shrink-0 mx-auto sm:mx-0"
+                />
+                <div className="flex-1 space-y-3 w-full">
+                  <p className="text-xs text-[#F7F2E8]/75 leading-relaxed">
+                    เก็บรูปนี้ไว้เป็นหลักฐานการสั่งจอง มีเลขที่คำสั่งจอง รายการ และยอดรวม —
+                    ไม่ใช่ใบจองที่ลงนาม ใบจองตัวจริงจะส่งให้ทางอีเมลภายหลัง
+                  </p>
+                  <div className="flex flex-wrap gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        orderImageBlob &&
+                        saveOrderImage(orderImageBlob, confirmedOrder.orderNumber, false).then(() =>
+                          setAutoSaveNote('บันทึกรูปคำสั่งจองลงในเครื่องให้แล้ว')
+                        )
+                      }
+                      className="px-4 py-2.5 rounded-xl btn-sacred-gold font-bold text-xs sm:text-sm inline-flex items-center gap-2"
+                    >
+                      <ImagePlus className="w-4 h-4" />
+                      บันทึกรูปภาพ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        orderImageBlob && saveOrderImage(orderImageBlob, confirmedOrder.orderNumber, true)
+                      }
+                      className="px-4 py-2.5 rounded-xl bg-[#221A0E] border border-[#C9A45C]/70 text-[#FCE694] text-xs sm:text-sm font-bold hover:border-[#FCE694] inline-flex items-center gap-2"
+                    >
+                      แชร์ / บันทึกไปที่อื่น
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-[#F7F2E8]/60">กำลังสร้างรูปบันทึกคำสั่งจอง...</p>
+            )}
+          </section>
 
           <section
             aria-labelledby="receipt-next"
