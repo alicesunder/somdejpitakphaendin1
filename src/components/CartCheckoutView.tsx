@@ -694,7 +694,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                         required
                         value={organization}
                         onChange={(e) => setOrganization(e.target.value)}
-                        placeholder="เช่น กก.ตชด.32 / บช.ตชด. / ประชาชนทั่วไป"
+                        placeholder="เช่น กก.ตชด.31 / บช.ตชด. / ประชาชนทั่วไป"
                         className="w-full px-3.5 py-2.5 text-sm border border-[#C9A45C]/55 rounded-xl bg-[#110D08] text-[#F7F2E8] placeholder-[#E5C158]/45 focus:outline-none focus:border-[#FCE694]"
                       />
                       {fieldErrors.organization && (
