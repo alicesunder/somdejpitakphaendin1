@@ -15,7 +15,7 @@ const SERIF = "'Border Patrol Police Bold', 'Noto Serif Thai', 'IBM Plex Sans Th
 const baht = (n: number) => `฿${Number(n || 0).toLocaleString('th-TH')}`;
 
 /** Thai has no spaces between words, so wrap by measuring character by character. */
-function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines = 3): string[] {
+export function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines = 3): string[] {
   const lines: string[] = [];
   let line = '';
   for (const ch of Array.from(text)) {

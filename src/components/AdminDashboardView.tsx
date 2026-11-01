@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ReservationCertificate } from './ReservationCertificate';
 import { VisitStatsCard } from './VisitStatsCard';
+import { OrderPdfExport } from './OrderPdfExport';
 import { compressSlipImage } from '../utils/slipImage';
 import {
   CheckCircle2,
@@ -771,6 +772,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       )}
 
       {dashboardData && adminToken && <VisitStatsCard adminToken={adminToken} />}
+
+      {dashboardData && adminToken && <OrderPdfExport orders={dashboardData.orders} adminToken={adminToken} />}
 
       {/* Summary KPI Cards */}
       {dashboardData && (

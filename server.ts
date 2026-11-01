@@ -457,7 +457,12 @@ export function createApp() {
       try {
         // Login only checks the env-var passcode, so it doesn't need the database.
         // Login and the visit counter don't use the store, so they skip loading it.
-        if (req.path === '/admin/login' || req.path === '/visit' || req.path === '/admin/visits') {
+        if (
+          req.path === '/admin/login' ||
+          req.path === '/visit' ||
+          req.path === '/admin/visits' ||
+          req.path === '/admin/slips/batch'
+        ) {
           next();
           return;
         }
@@ -1063,6 +1068,26 @@ export function createApp() {
       console.warn('[visits] record failed:', (err as Error).message);
     }
     res.status(204).end();
+  });
+
+  // Several payment slips at once, for the per-day PDF export. Only the slips table is read (the
+  // store is not loaded) and the batch is small so the response stays under Vercel's 4.5 MB limit.
+  app.post('/api/admin/slips/batch', requireAdmin, async (req, res) => {
+    const ids: string[] = Array.isArray(req.body?.ids)
+      ? req.body.ids.filter((x: unknown): x is string => typeof x === 'string' && x.length < 80).slice(0, 6)
+      : [];
+    try {
+      const slips: Record<string, string | null> = {};
+      await Promise.all(
+        ids.map(async (id) => {
+          slips[id] = (await readSlip(id))?.dataUrl ?? null;
+        }),
+      );
+      res.json({ slips });
+    } catch (err) {
+      console.error('[slips] batch failed:', err);
+      res.status(500).json({ error: 'โหลดสลิปไม่สำเร็จ' });
+    }
   });
 
   app.get('/api/admin/visits', requireAdmin, async (_req, res) => {

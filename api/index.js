@@ -2137,7 +2137,7 @@ function createApp() {
     res.on("close", release);
     prev.then(async () => {
       try {
-        if (req.path === "/admin/login" || req.path === "/visit" || req.path === "/admin/visits") {
+        if (req.path === "/admin/login" || req.path === "/visit" || req.path === "/admin/visits" || req.path === "/admin/slips/batch") {
           next();
           return;
         }
@@ -2616,6 +2616,21 @@ function createApp() {
       console.warn("[visits] record failed:", err.message);
     }
     res.status(204).end();
+  });
+  app2.post("/api/admin/slips/batch", requireAdmin, async (req, res) => {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((x) => typeof x === "string" && x.length < 80).slice(0, 6) : [];
+    try {
+      const slips = {};
+      await Promise.all(
+        ids.map(async (id) => {
+          slips[id] = (await readSlip(id))?.dataUrl ?? null;
+        })
+      );
+      res.json({ slips });
+    } catch (err) {
+      console.error("[slips] batch failed:", err);
+      res.status(500).json({ error: "\u0E42\u0E2B\u0E25\u0E14\u0E2A\u0E25\u0E34\u0E1B\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08" });
+    }
   });
   app2.get("/api/admin/visits", requireAdmin, async (_req, res) => {
     try {
