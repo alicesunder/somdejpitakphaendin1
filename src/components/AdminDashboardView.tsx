@@ -1131,7 +1131,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <div
                   role="dialog"
                   aria-modal="true"
-                  className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+                  className="fixed inset-0 z-50 bg-black/70 flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto"
                 >
                   <form
                     onSubmit={handleUpdateOrderStatus}
@@ -1165,6 +1165,132 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         <strong>ยอดรวม:</strong> ฿
                         {selectedOrder.grandTotal.toLocaleString()} บาท
                       </p>
+                    </div>
+
+                    {selectedOrder.paymentStatus !== 'payment_rejected' && (
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="ทางลัดตรวจสลิป">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOrderPaymentStatus('verified_paid');
+                            if (orderPrepStatus === 'awaiting_payment') setOrderPrepStatus('inspecting_artifact');
+                            setOrderNote(orderNote || 'ตรวจสอบสลิปแล้ว ยอดถูกต้อง ยืนยันการชำระเงิน');
+                          }}
+                          className="px-3 py-2 min-h-[44px] rounded-lg bg-emerald-700 text-white text-xs font-bold"
+                        >
+                          ✓ สลิปถูกต้อง ยืนยันรับชำระ
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOrderPaymentStatus('pending_verification');
+                            setOrderNote('สลิปไม่ชัดเจนหรือยอดไม่ตรง กรุณาแนบสลิปใหม่ที่เมนู “ตรวจสอบสถานะ”');
+                          }}
+                          className="px-3 py-2 min-h-[44px] rounded-lg border border-amber-500 bg-amber-50 text-amber-900 text-xs font-bold"
+                        >
+                          ขอให้แนบสลิปใหม่
+                        </button>
+                        <span className="w-full text-[11px] text-[#77717C]">ปุ่มลัดเพียงเติมค่าให้ในช่องด้านล่าง ต้องกด “บันทึก” ท้ายฟอร์มจึงจะมีผล และผู้จองเห็นหมายเหตุในหน้าตรวจสอบสถานะ</span>
+                      </div>
+                    )}
+
+                    <div className="space-y-3 text-xs">
+                      <div>
+                        <label className="block font-semibold mb-1">
+                          1. สถานะการชำระเงิน
+                        </label>
+                        <select
+                          value={orderPaymentStatus}
+                          onChange={(e) =>
+                            setOrderPaymentStatus(
+                              e.target.value as PaymentStatus
+                            )
+                          }
+                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
+                        >
+                          <option value="pending_verification">
+                            รอตรวจสอบยอดชำระเงิน
+                          </option>
+                          <option value="verified_paid">
+                            ชำระเงินแล้ว (ยืนยันยอดเรียบร้อย)
+                          </option>
+                          <option value="payment_rejected">
+                            ยกเลิกใบจอง / ไม่ชำระภายในกำหนด (คืนสต็อก & ปล่อยเลข 1–99)
+                          </option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold mb-1">
+                          2. สถานะการจัดเตรียมวัตถุมงคล
+                        </label>
+                        <select
+                          value={orderPrepStatus}
+                          onChange={(e) =>
+                            setOrderPrepStatus(
+                              e.target.value as PreparationStatus
+                            )
+                          }
+                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
+                        >
+                          <option value="awaiting_payment">
+                            รอยืนยันการชำระเงิน
+                          </option>
+                          <option value="inspecting_artifact">
+                            กำลังคัดตรวจองค์พระและตอกหมายเลข
+                          </option>
+                          <option value="packed_ready">
+                            บรรจุกล่องพร้อมส่งมอบ
+                          </option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold mb-1">
+                          3. สถานะการจัดส่ง
+                        </label>
+                        <select
+                          value={orderShippingStatus}
+                          onChange={(e) =>
+                            setOrderShippingStatus(
+                              e.target.value as ShippingStatus
+                            )
+                          }
+                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
+                        >
+                          <option value="not_shipped">ยังไม่จัดส่ง</option>
+                          <option value="in_transit">อยู่ระหว่างจัดส่ง</option>
+                          <option value="delivered">ส่งมอบเรียบร้อยแล้ว</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold mb-1">
+                          เลขพัสดุไปรษณีย์ (ถ้ามี)
+                        </label>
+                        <input
+                          type="text"
+                          value={orderTrackingNumber}
+                          onChange={(e) =>
+                            setOrderTrackingNumber(e.target.value)
+                          }
+                          placeholder="เช่น EMS TH-88492019TH"
+                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg font-tabular"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold mb-1">
+                          บันทึกหมายเหตุผู้ดูแล
+                        </label>
+                        <input
+                          type="text"
+                          value={orderNote}
+                          onChange={(e) => setOrderNote(e.target.value)}
+                          placeholder="ระบุหมายเหตุการตรวจสอบ"
+                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
+                        />
+                      </div>
                     </div>
 
                     <div className="rounded-xl border border-[#E8E2D5] p-3 space-y-2 text-xs">
@@ -1336,133 +1462,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       </button>
                     </div>
 
-                    {selectedOrder.paymentStatus !== 'payment_rejected' && (
-                      <div className="flex flex-wrap gap-2" role="group" aria-label="ทางลัดตรวจสลิป">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOrderPaymentStatus('verified_paid');
-                            if (orderPrepStatus === 'awaiting_payment') setOrderPrepStatus('inspecting_artifact');
-                            setOrderNote(orderNote || 'ตรวจสอบสลิปแล้ว ยอดถูกต้อง ยืนยันการชำระเงิน');
-                          }}
-                          className="px-3 py-2 min-h-[44px] rounded-lg bg-emerald-700 text-white text-xs font-bold"
-                        >
-                          ✓ สลิปถูกต้อง ยืนยันรับชำระ
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOrderPaymentStatus('pending_verification');
-                            setOrderNote('สลิปไม่ชัดเจนหรือยอดไม่ตรง กรุณาแนบสลิปใหม่ที่เมนู “ตรวจสอบสถานะ”');
-                          }}
-                          className="px-3 py-2 min-h-[44px] rounded-lg border border-amber-500 bg-amber-50 text-amber-900 text-xs font-bold"
-                        >
-                          ขอให้แนบสลิปใหม่
-                        </button>
-                        <span className="w-full text-[11px] text-[#77717C]">ปุ่มลัดเพียงเติมค่าให้ในช่องด้านล่าง ต้องกด “บันทึก” ท้ายฟอร์มจึงจะมีผล และผู้จองเห็นหมายเหตุในหน้าตรวจสอบสถานะ</span>
-                      </div>
-                    )}
-
-                    <div className="space-y-3 text-xs">
-                      <div>
-                        <label className="block font-semibold mb-1">
-                          1. สถานะการชำระเงิน
-                        </label>
-                        <select
-                          value={orderPaymentStatus}
-                          onChange={(e) =>
-                            setOrderPaymentStatus(
-                              e.target.value as PaymentStatus
-                            )
-                          }
-                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
-                        >
-                          <option value="pending_verification">
-                            รอตรวจสอบยอดชำระเงิน
-                          </option>
-                          <option value="verified_paid">
-                            ชำระเงินแล้ว (ยืนยันยอดเรียบร้อย)
-                          </option>
-                          <option value="payment_rejected">
-                            ยกเลิกใบจอง / ไม่ชำระภายในกำหนด (คืนสต็อก & ปล่อยเลข 1–99)
-                          </option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold mb-1">
-                          2. สถานะการจัดเตรียมวัตถุมงคล
-                        </label>
-                        <select
-                          value={orderPrepStatus}
-                          onChange={(e) =>
-                            setOrderPrepStatus(
-                              e.target.value as PreparationStatus
-                            )
-                          }
-                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
-                        >
-                          <option value="awaiting_payment">
-                            รอยืนยันการชำระเงิน
-                          </option>
-                          <option value="inspecting_artifact">
-                            กำลังคัดตรวจองค์พระและตอกหมายเลข
-                          </option>
-                          <option value="packed_ready">
-                            บรรจุกล่องพร้อมส่งมอบ
-                          </option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold mb-1">
-                          3. สถานะการจัดส่ง
-                        </label>
-                        <select
-                          value={orderShippingStatus}
-                          onChange={(e) =>
-                            setOrderShippingStatus(
-                              e.target.value as ShippingStatus
-                            )
-                          }
-                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
-                        >
-                          <option value="not_shipped">ยังไม่จัดส่ง</option>
-                          <option value="in_transit">อยู่ระหว่างจัดส่ง</option>
-                          <option value="delivered">ส่งมอบเรียบร้อยแล้ว</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold mb-1">
-                          เลขพัสดุไปรษณีย์ (ถ้ามี)
-                        </label>
-                        <input
-                          type="text"
-                          value={orderTrackingNumber}
-                          onChange={(e) =>
-                            setOrderTrackingNumber(e.target.value)
-                          }
-                          placeholder="เช่น EMS TH-88492019TH"
-                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg font-tabular"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold mb-1">
-                          บันทึกหมายเหตุผู้ดูแล
-                        </label>
-                        <input
-                          type="text"
-                          value={orderNote}
-                          onChange={(e) => setOrderNote(e.target.value)}
-                          placeholder="ระบุหมายเหตุการตรวจสอบ"
-                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-3 border-t border-[#E8E2D5] flex justify-end gap-2">
+                    <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-3 bg-white border-t border-[#E8E2D5] rounded-b-2xl flex justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => setSelectedOrder(null)}
