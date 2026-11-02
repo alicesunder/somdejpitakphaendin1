@@ -5,6 +5,8 @@ export const BOOKING_OPEN_DATE_TEXT = '30 ตุลาคม 2569';
 export const BOOKING_CLOSED_MESSAGE = `ยังไม่เปิดให้จอง — เปิดให้จองวันที่ ${BOOKING_OPEN_DATE_TEXT}`;
 // Shown when staff have switched sales off from the admin dashboard (siteConfig.salesOpen === false).
 export const SALES_PAUSED_MESSAGE = 'ปิดรับจองชั่วคราว — กรุณาติดตามประกาศจากเจ้าหน้าที่';
+// Nightly maintenance notice shown on every page while booking is open.
+export const NIGHTLY_CLOSURE_NOTICE = 'ระบบจองปิดให้บริการทุกคืน ตั้งแต่เวลา 23:00 น. ถึง 02:30 น.';
 
 export function isBookingOpen(
   now: number = Date.now(),

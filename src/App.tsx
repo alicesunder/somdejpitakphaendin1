@@ -8,6 +8,7 @@ import { CalendarClock, CheckCircle2, Heart } from 'lucide-react';
 import {
   BOOKING_CLOSED_MESSAGE,
   BOOKING_OPEN_DATE_TEXT,
+  NIGHTLY_CLOSURE_NOTICE,
   SALES_PAUSED_MESSAGE,
   isBookingOpen,
 } from './config/booking';
@@ -579,6 +580,15 @@ export default function App() {
                   : `เปิดให้จองวันที่ ${BOOKING_OPEN_DATE_TEXT}`}
               </span>
             </p>
+          </div>
+        </div>
+      )}
+
+      {bookingOpen && (
+        <div role="status" className="no-print bg-[#2B2112] border-b border-[#C9A45C]/40 text-[#FCE694]">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex items-center justify-center gap-2 text-center">
+            <CalendarClock className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <p className="text-xs sm:text-sm font-semibold leading-snug">{NIGHTLY_CLOSURE_NOTICE}</p>
           </div>
         </div>
       )}
