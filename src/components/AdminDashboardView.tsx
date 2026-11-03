@@ -4,9 +4,12 @@ import { createPortal } from 'react-dom';
 import { ReservationCertificate } from './ReservationCertificate';
 import { VisitStatsCard } from './VisitStatsCard';
 import { OrderPdfExport } from './OrderPdfExport';
+import { bangkokDay, paidAt } from '../utils/orderPdf';
 import { compressSlipImage } from '../utils/slipImage';
 import {
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Eye,
   EyeOff,
@@ -24,6 +27,7 @@ import {
   Settings,
   ShoppingBag,
   Trash2,
+  X,
 } from 'lucide-react';
 import {
   AmuletProduct,
@@ -479,8 +483,26 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [orderSearch, setOrderSearch] = useState('');
   const [orderFilter, setOrderFilter] = useState<'all' | 'slip_wait' | 'no_slip' | 'paid' | 'rejected'>('all');
 
+  const [dayFilter, setDayFilter] = useState(''); // yyyy-mm-dd (Thailand time); '' = every day
+  const [dayBasis, setDayBasis] = useState<'booked' | 'paid'>('booked');
+
+  // The most recent days that have orders, with how many, for one-tap day chips.
+  const dayChips = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const o of dashboardData?.orders || []) {
+      const d = bangkokDay(dayBasis === 'booked' ? o.createdAt : paidAt(o));
+      counts.set(d, (counts.get(d) || 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 7);
+  }, [dashboardData?.orders, dayBasis]);
+
+  const dayOrders = useMemo(
+    () => (dayFilter ? (dashboardData?.orders || []).filter((o) => bangkokDay(dayBasis === 'booked' ? o.createdAt : paidAt(o)) === dayFilter) : dashboardData?.orders || []),
+    [dashboardData?.orders, dayFilter, dayBasis],
+  );
+
   const orderCounts = useMemo(() => {
-    const list = dashboardData?.orders || [];
+    const list = dayOrders;
     return {
       all: list.length,
       slip_wait: list.filter((o) => o.paymentStatus === 'pending_verification' && o.slipUploadedAt).length,
@@ -488,12 +510,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       paid: list.filter((o) => o.paymentStatus === 'verified_paid').length,
       rejected: list.filter((o) => o.paymentStatus === 'payment_rejected').length,
     };
-  }, [dashboardData?.orders]);
+  }, [dayOrders]);
 
   const filteredOrders = useMemo(() => {
     const q = orderSearch.trim().toLowerCase();
     const qDigits = q.replace(/\D/g, '');
-    return (dashboardData?.orders || []).filter((o) => {
+    return dayOrders.filter((o) => {
       if (orderFilter === 'slip_wait' && !(o.paymentStatus === 'pending_verification' && o.slipUploadedAt)) return false;
       if (orderFilter === 'no_slip' && !(o.paymentStatus === 'pending_verification' && !o.slipUploadedAt)) return false;
       if (orderFilter === 'paid' && o.paymentStatus !== 'verified_paid') return false;
@@ -507,7 +529,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         (o.selectedNumbers || []).some((n) => String(n) === q.replace('#', ''))
       );
     });
-  }, [dashboardData?.orders, orderSearch, orderFilter]);
+  }, [dayOrders, orderSearch, orderFilter]);
+
+  // Previous / next order in the list as filtered, so staff can work down the list from the dialog.
+  const selectedIndex = selectedOrder ? filteredOrders.findIndex((o) => o.id === selectedOrder.id) : -1;
+  const prevOrder = selectedIndex > 0 ? filteredOrders[selectedIndex - 1] : null;
+  const nextOrder = selectedIndex >= 0 && selectedIndex < filteredOrders.length - 1 ? filteredOrders[selectedIndex + 1] : null;
+  const orderDirty = Boolean(
+    selectedOrder &&
+      (orderPaymentStatus !== selectedOrder.paymentStatus ||
+        orderPrepStatus !== selectedOrder.preparationStatus ||
+        orderShippingStatus !== selectedOrder.shippingStatus ||
+        orderTrackingNumber !== (selectedOrder.trackingNumber || '') ||
+        orderNote.trim() !== ''),
+  );
 
   const loadSlip = async (order: OrderRecord) => {
     if (!adminToken) return;
@@ -527,6 +562,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!selectedOrder) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (slipZoom) setSlipZoom(false);
+      else setSelectedOrder(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedOrder, slipZoom]);
+
   const handleOpenOrderModal = (order: OrderRecord) => {
     setSlipView({ state: 'none' });
     setSlipZoom(false);
@@ -539,9 +585,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setOrderNote('');
   };
 
-  const handleUpdateOrderStatus = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdateOrderStatus = async (e: React.FormEvent | null, advance = false) => {
+    e?.preventDefault();
     if (!adminToken || !selectedOrder) return;
+    const goTo = advance ? nextOrder : null;
     if (
       orderPaymentStatus === 'payment_rejected' &&
       selectedOrder.paymentStatus !== 'payment_rejected' &&
@@ -566,12 +613,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     });
 
     if (res.ok) {
-      setSelectedOrder(null);
       await fetchDashboard(adminToken);
       onStoreUpdated();
       showToast(
         `อัปเดตสถานะใบจอง ${selectedOrder.orderNumber} เรียบร้อยแล้ว`
       );
+      if (goTo) handleOpenOrderModal(goTo);
+      else setSelectedOrder(null);
+    } else {
+      const data = await res.json().catch(() => null);
+      showToast((data && data.error) || 'บันทึกสถานะไม่สำเร็จ กรุณาลองอีกครั้ง', 6000);
     }
   };
 
@@ -998,6 +1049,48 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   className="flex-1 min-w-[220px] px-3 py-2.5 min-h-[44px] text-sm border border-[#E8E2D5] rounded-xl bg-white"
                 />
               </div>
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="กรองตามวัน">
+                <span className="text-xs font-bold text-[#5A5244]">วัน:</span>
+                <button
+                  type="button"
+                  aria-pressed={dayFilter === ''}
+                  onClick={() => setDayFilter('')}
+                  className={`px-3.5 py-2 min-h-[40px] rounded-full text-xs font-bold border ${
+                    dayFilter === '' ? 'bg-[#14100A] text-[#FCE694] border-[#14100A]' : 'bg-white text-[#29222E] border-[#E8E2D5] hover:border-[#14100A]'
+                  }`}
+                >
+                  ทุกวัน
+                </button>
+                {dayChips.map(([d, n]) => (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={dayFilter === d}
+                    onClick={() => setDayFilter(d)}
+                    className={`px-3.5 py-2 min-h-[40px] rounded-full text-xs font-bold border ${
+                      dayFilter === d ? 'bg-[#14100A] text-[#FCE694] border-[#14100A]' : 'bg-white text-[#29222E] border-[#E8E2D5] hover:border-[#14100A]'
+                    }`}
+                  >
+                    {new Date(`${d}T12:00:00+07:00`).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} ({n})
+                  </button>
+                ))}
+                <input
+                  type="date"
+                  value={dayFilter}
+                  onChange={(e) => setDayFilter(e.target.value)}
+                  aria-label="เลือกวันที่"
+                  className="px-3 py-2 min-h-[40px] text-xs border border-[#E8E2D5] rounded-xl bg-white"
+                />
+                <select
+                  value={dayBasis}
+                  onChange={(e) => setDayBasis(e.target.value as 'booked' | 'paid')}
+                  aria-label="นับวันตาม"
+                  className="px-3 py-2 min-h-[40px] text-xs border border-[#E8E2D5] rounded-xl bg-white"
+                >
+                  <option value="booked">ตามวันที่จอง</option>
+                  <option value="paid">ตามวันที่ชำระ/ส่งสลิป</option>
+                </select>
+              </div>
               <div className="flex flex-wrap gap-2" role="group" aria-label="กรองสถานะ">
                 {([
                   ['all', 'ทั้งหมด'],
@@ -1018,6 +1111,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     {l} ({orderCounts[k]})
                   </button>
                 ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-[#5A5244]">
+                <span>
+                  แสดง {filteredOrders.length} จาก {dashboardData?.orders.length || 0} ใบจอง
+                </span>
+                {(dayFilter || orderFilter !== 'all' || orderSearch) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDayFilter('');
+                      setOrderFilter('all');
+                      setOrderSearch('');
+                    }}
+                    className="underline font-semibold text-[#8A6D2F]"
+                  >
+                    ล้างตัวกรองทั้งหมด
+                  </button>
+                )}
               </div>
               {filteredOrders.length === 0 && (
                 <p className="text-sm text-[#77717C] py-6 text-center">ไม่พบใบจองที่ตรงกับเงื่อนไข</p>
@@ -1149,7 +1260,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </table>
               </div>
 
-              {newOrderOpen && adminToken && dashboardData && (
+              {newOrderOpen && adminToken && dashboardData && createPortal(
                 <AdminNewOrderModal
                   adminToken={adminToken}
                   products={dashboardData.products}
@@ -1162,10 +1273,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     onStoreUpdated();
                   }}
                   onCreated={() => undefined}
-                />
+                />,
+                document.body,
               )}
 
-              {slipZoom && slipView.dataUrl && (
+              {slipZoom && slipView.dataUrl && createPortal(
                 <div
                   role="dialog"
                   aria-label="สลิปขนาดเต็ม"
@@ -1173,261 +1285,303 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   onClick={() => setSlipZoom(false)}
                 >
                   <img src={slipView.dataUrl} alt="สลิปการโอนเงินขนาดเต็ม" className="max-h-full max-w-full object-contain" />
-                </div>
+                </div>,
+                document.body,
               )}
 
-              {selectedOrder && (
+              {selectedOrder && createPortal(
                 <div
                   role="dialog"
                   aria-modal="true"
-                  className="fixed inset-0 z-50 bg-black/70 flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto"
+                  aria-label={`อัปเดตสถานะใบจอง ${selectedOrder.orderNumber}`}
+                  className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-2 sm:p-4 overflow-y-auto"
                 >
                   <form
-                    onSubmit={handleUpdateOrderStatus}
-                    className="bg-[#FFFFFF] border border-[#E8E2D5] rounded-2xl max-w-lg w-full p-6 space-y-4"
+                    onSubmit={(e) => handleUpdateOrderStatus(e)}
+                    className="bg-[#FFFFFF] border border-[#E8E2D5] rounded-2xl w-full max-w-5xl my-auto flex flex-col"
                   >
-                    <h3 className="font-serif-heritage text-lg font-bold text-[#14100A] border-b border-[#E8E2D5] pb-3">
-                      อัปเดตสถานะใบจอง: {selectedOrder.orderNumber}
-                    </h3>
-
-                    <div className="text-xs space-y-1 bg-[#F7F2E8] p-3 rounded-xl">
-                      <p>
-                        <strong>ผู้จอง:</strong> {selectedOrder.customerName} (
-                        {selectedOrder.organization || 'ประชาชนทั่วไป'})
-                      </p>
-                      <p>
-                        <strong>เบอร์โทรศัพท์:</strong>{' '}
-                        {selectedOrder.customerPhone}
-                      </p>
-                      <p>
-                        <strong>วิธีการรับพระ:</strong>{' '}
-                        {selectedOrder.deliveryMethod === 'pickup_bpp' ||
-                        (selectedOrder.shippingAddress || '').includes('มารับเอง')
-                          ? 'มารับเองที่ บช.ตชด.'
-                          : 'จัดส่งทางไปรษณีย์'}
-                      </p>
-                      <p>
-                        <strong>สถานที่รับ / ที่อยู่จัดส่ง:</strong>{' '}
-                        {selectedOrder.shippingAddress || '-'}
-                      </p>
-                      <p>
-                        <strong>ยอดรวม:</strong> ฿
-                        {selectedOrder.grandTotal.toLocaleString()} บาท
-                      </p>
-                    </div>
-
-                    {selectedOrder.paymentStatus !== 'payment_rejected' && (
-                      <div className="flex flex-wrap gap-2" role="group" aria-label="ทางลัดตรวจสลิป">
+                    {/* Header: which order, where it sits in the filtered list, previous / next */}
+                    <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-3 border-b border-[#E8E2D5]">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] text-[#77717C]">อัปเดตสถานะใบจอง</p>
+                        <h3 className="font-serif-heritage text-lg sm:text-xl font-bold text-[#14100A] flex flex-wrap items-center gap-2">
+                          <span className="font-tabular">{selectedOrder.orderNumber}</span>
+                          <span
+                            className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold font-sans ${
+                              selectedOrder.paymentStatus === 'verified_paid'
+                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                : selectedOrder.paymentStatus === 'payment_rejected'
+                                ? 'bg-red-100 text-red-900 border border-red-300'
+                                : 'bg-amber-100 text-amber-900 border border-amber-300'
+                            }`}
+                          >
+                            {selectedOrder.paymentStatus === 'verified_paid'
+                              ? 'ชำระเงินยืนยันแล้ว'
+                              : selectedOrder.paymentStatus === 'payment_rejected'
+                              ? 'ยกเลิกใบจอง'
+                              : 'รอตรวจสอบการชำระเงิน'}
+                          </span>
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => {
-                            setOrderPaymentStatus('verified_paid');
-                            if (orderPrepStatus === 'awaiting_payment') setOrderPrepStatus('inspecting_artifact');
-                            setOrderNote(orderNote || 'ตรวจสอบสลิปแล้ว ยอดถูกต้อง ยืนยันการชำระเงิน');
-                          }}
-                          className="px-3 py-2 min-h-[44px] rounded-lg bg-emerald-700 text-white text-xs font-bold"
+                          onClick={() => prevOrder && handleOpenOrderModal(prevOrder)}
+                          disabled={!prevOrder}
+                          aria-label="ใบจองก่อนหน้า"
+                          className="w-10 h-10 rounded-lg border border-[#E8E2D5] inline-flex items-center justify-center disabled:opacity-30"
                         >
-                          ✓ สลิปถูกต้อง ยืนยันรับชำระ
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-xs text-[#5A5244] font-tabular min-w-[56px] text-center">
+                          {selectedIndex >= 0 ? `${selectedIndex + 1} / ${filteredOrders.length}` : '—'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => nextOrder && handleOpenOrderModal(nextOrder)}
+                          disabled={!nextOrder}
+                          aria-label="ใบจองถัดไป"
+                          className="w-10 h-10 rounded-lg border border-[#E8E2D5] inline-flex items-center justify-center disabled:opacity-30"
+                        >
+                          <ChevronRight className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            setOrderPaymentStatus('pending_verification');
-                            setOrderNote('สลิปไม่ชัดเจนหรือยอดไม่ตรง กรุณาแนบสลิปใหม่ที่เมนู “ตรวจสอบสถานะ”');
-                          }}
-                          className="px-3 py-2 min-h-[44px] rounded-lg border border-amber-500 bg-amber-50 text-amber-900 text-xs font-bold"
+                          onClick={() => setSelectedOrder(null)}
+                          aria-label="ปิดหน้าต่าง"
+                          className="ml-1 w-10 h-10 rounded-lg border border-[#E8E2D5] inline-flex items-center justify-center hover:bg-[#F7F2E8]"
                         >
-                          ขอให้แนบสลิปใหม่
+                          <X className="w-4 h-4" />
                         </button>
-                        <span className="w-full text-[11px] text-[#77717C]">ปุ่มลัดเพียงเติมค่าให้ในช่องด้านล่าง ต้องกด “บันทึก” ท้ายฟอร์มจึงจะมีผล และผู้จองเห็นหมายเหตุในหน้าตรวจสอบสถานะ</span>
-                      </div>
-                    )}
-
-                    <div className="space-y-3 text-xs">
-                      <div>
-                        <label className="block font-semibold mb-1">
-                          1. สถานะการชำระเงิน
-                        </label>
-                        <select
-                          value={orderPaymentStatus}
-                          onChange={(e) =>
-                            setOrderPaymentStatus(
-                              e.target.value as PaymentStatus
-                            )
-                          }
-                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
-                        >
-                          <option value="pending_verification">
-                            รอตรวจสอบยอดชำระเงิน
-                          </option>
-                          <option value="verified_paid">
-                            ชำระเงินแล้ว (ยืนยันยอดเรียบร้อย)
-                          </option>
-                          <option value="payment_rejected">
-                            ยกเลิกใบจอง / ไม่ชำระภายในกำหนด (คืนสต็อก & ปล่อยเลข 1–99)
-                          </option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold mb-1">
-                          2. สถานะการจัดเตรียมวัตถุมงคล
-                        </label>
-                        <select
-                          value={orderPrepStatus}
-                          onChange={(e) =>
-                            setOrderPrepStatus(
-                              e.target.value as PreparationStatus
-                            )
-                          }
-                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
-                        >
-                          <option value="awaiting_payment">
-                            รอยืนยันการชำระเงิน
-                          </option>
-                          <option value="inspecting_artifact">
-                            กำลังคัดตรวจองค์พระและตอกหมายเลข
-                          </option>
-                          <option value="packed_ready">
-                            บรรจุกล่องพร้อมส่งมอบ
-                          </option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold mb-1">
-                          3. สถานะการจัดส่ง
-                        </label>
-                        <select
-                          value={orderShippingStatus}
-                          onChange={(e) =>
-                            setOrderShippingStatus(
-                              e.target.value as ShippingStatus
-                            )
-                          }
-                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
-                        >
-                          <option value="not_shipped">ยังไม่จัดส่ง</option>
-                          <option value="in_transit">อยู่ระหว่างจัดส่ง</option>
-                          <option value="delivered">ส่งมอบเรียบร้อยแล้ว</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold mb-1">
-                          เลขพัสดุไปรษณีย์ (ถ้ามี)
-                        </label>
-                        <input
-                          type="text"
-                          value={orderTrackingNumber}
-                          onChange={(e) =>
-                            setOrderTrackingNumber(e.target.value)
-                          }
-                          placeholder="เช่น EMS TH-88492019TH"
-                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg font-tabular"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold mb-1">
-                          บันทึกหมายเหตุผู้ดูแล
-                        </label>
-                        <input
-                          type="text"
-                          value={orderNote}
-                          onChange={(e) => setOrderNote(e.target.value)}
-                          placeholder="ระบุหมายเหตุการตรวจสอบ"
-                          className="w-full px-3 py-2 border border-[#E8E2D5] rounded-lg"
-                        />
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-[#E8E2D5] p-3 space-y-2 text-xs">
-                      <p className="font-bold text-[#14100A]">หลักฐานการโอนเงิน (สลิป)</p>
-                      {!selectedOrder.slipUploadedAt && <p className="text-[#77717C]">ผู้จองยังไม่ได้แนบสลิป</p>}
-                      {selectedOrder.slipUploadedAt && (
-                        <>
-                          <p className="text-[#5A5244]">
-                            แนบเมื่อ {new Date(selectedOrder.slipUploadedAt).toLocaleString('th-TH')}
-                            {selectedOrder.slipCount && selectedOrder.slipCount > 1 ? ` (แนบ ${selectedOrder.slipCount} ครั้ง ใช้ล่าสุด)` : ''}
-                            {selectedOrder.slipTransferTime ? ` · เวลาโอนที่แจ้ง: ${selectedOrder.slipTransferTime}` : ''}
-                          </p>
-                          {selectedOrder.slipTransferAmount !== undefined && (
-                            <p
-                              className={`font-bold ${
-                                selectedOrder.slipTransferAmount === selectedOrder.grandTotal ? 'text-emerald-700' : 'text-red-700'
-                              }`}
-                            >
-                              ยอดที่ผู้จองแจ้ง ฿{selectedOrder.slipTransferAmount.toLocaleString()}{' '}
-                              {selectedOrder.slipTransferAmount === selectedOrder.grandTotal
-                                ? '(ตรงกับยอดใบจอง)'
-                                : `(ไม่ตรง! ยอดใบจอง ฿${selectedOrder.grandTotal.toLocaleString()})`}
+                    <div className="grid md:grid-cols-[minmax(0,340px)_minmax(0,1fr)] gap-4 sm:gap-5 p-4 sm:p-6">
+                      {/* Left: the slip, big, so it can be checked without scrolling */}
+                      <div className="space-y-2 text-xs md:sticky md:top-3 self-start">
+                        <p className="font-bold text-sm text-[#14100A]">หลักฐานการโอนเงิน (สลิป)</p>
+                        {!selectedOrder.slipUploadedAt && (
+                          <p className="rounded-lg bg-[#F7F2E8] p-3 text-[#77717C]">ผู้จองยังไม่ได้แนบสลิป</p>
+                        )}
+                        {selectedOrder.slipUploadedAt && (
+                          <>
+                            {selectedOrder.slipTransferAmount !== undefined && (
+                              <p
+                                className={`rounded-lg px-3 py-2 font-bold ${
+                                  selectedOrder.slipTransferAmount === selectedOrder.grandTotal
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                    : 'bg-red-50 text-red-800 border border-red-200'
+                                }`}
+                              >
+                                ยอดที่ผู้จองแจ้ง ฿{selectedOrder.slipTransferAmount.toLocaleString()}{' '}
+                                {selectedOrder.slipTransferAmount === selectedOrder.grandTotal
+                                  ? '✓ ตรงกับยอดใบจอง'
+                                  : `✗ ไม่ตรง! ยอดใบจอง ฿${selectedOrder.grandTotal.toLocaleString()}`}
+                              </p>
+                            )}
+                            <p className="text-[#5A5244]">
+                              แนบเมื่อ {new Date(selectedOrder.slipUploadedAt).toLocaleString('th-TH')}
+                              {selectedOrder.slipCount && selectedOrder.slipCount > 1 ? ` (แนบ ${selectedOrder.slipCount} ครั้ง ใช้ล่าสุด)` : ''}
+                              {selectedOrder.slipTransferTime ? ` · เวลาโอนที่แจ้ง: ${selectedOrder.slipTransferTime}` : ''}
                             </p>
-                          )}
-                          {slipView.state === 'loading' && <p className="text-[#77717C]">กำลังโหลดสลิป...</p>}
-                          {slipView.state === 'error' && <p className="text-red-700">{slipView.message}</p>}
-                          {slipView.state === 'ready' && slipView.dataUrl && (
-                            <button type="button" onClick={() => setSlipZoom(true)} className="block" aria-label="ขยายรูปสลิป">
-                              <img src={slipView.dataUrl} alt="สลิปการโอนเงิน" className="max-h-56 rounded-lg border border-[#E8E2D5] object-contain bg-white" />
-                              <span className="mt-1 block text-[11px] text-[#8A6D2F] underline">แตะเพื่อดูขนาดเต็ม</span>
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
+                            {slipView.state === 'loading' && <p className="text-[#77717C]">กำลังโหลดสลิป...</p>}
+                            {slipView.state === 'error' && <p className="text-red-700">{slipView.message}</p>}
+                            {slipView.state === 'ready' && slipView.dataUrl && (
+                              <button type="button" onClick={() => setSlipZoom(true)} className="block w-full" aria-label="ขยายรูปสลิป">
+                                <img
+                                  src={slipView.dataUrl}
+                                  alt="สลิปการโอนเงิน"
+                                  className="mx-auto max-h-[34vh] md:max-h-[68vh] w-auto max-w-full rounded-lg border border-[#E8E2D5] object-contain bg-white"
+                                />
+                                <span className="mt-1 block text-[11px] text-[#8A6D2F] underline">แตะเพื่อดูขนาดเต็ม</span>
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
 
-                    <details className="rounded-xl border border-[#E8E2D5] p-3 text-xs" open>
-                      <summary className="font-bold text-[#14100A] cursor-pointer min-h-[32px] flex items-center">รายละเอียดผู้ซื้อและรายการทั้งหมด</summary>
-                      <div className="mt-2 space-y-1.5 text-[#29222E]">
-                        <p><strong>วันที่จอง:</strong> {new Date(selectedOrder.createdAt).toLocaleString('th-TH')}{selectedOrder.salesChannel === 'admin' ? ' · เจ้าหน้าที่สร้างให้' : ' · จองผ่านเว็บไซต์'}</p>
-                        <p>
-                          <strong>อีเมล:</strong> {selectedOrder.customerEmail || '-'}
-                          {selectedOrder.receiptEmailedAt && (
-                            <span className="text-emerald-700">
-                              {' '}· ส่งใบจองแล้วเมื่อ {new Date(selectedOrder.receiptEmailedAt).toLocaleString('th-TH')}
-                            </span>
-                          )}
-                        </p>
-
-                        <p><strong>รหัสไปรษณีย์:</strong> {selectedOrder.postalCode || '-'}</p>
-                        <p>
-                          <strong>ช่องทางชำระ:</strong>{' '}
-                          {selectedOrder.paymentMethod === 'promptpay' ? 'พร้อมเพย์' : selectedOrder.paymentMethod === 'cash' ? 'เงินสด / ชำระกับเจ้าหน้าที่' : 'โอนบัญชีธนาคาร'}
-                          {selectedOrder.transferReference ? ` (${selectedOrder.transferReference})` : ''}
-                        </p>
-                        {selectedOrder.adminNote && <p><strong>หมายเหตุภายใน:</strong> {selectedOrder.adminNote}</p>}
-                        <div className="pt-1">
-                          <strong>รายการ:</strong>
-                          <ul className="mt-1 space-y-1">
-                            {selectedOrder.items.map((it) => (
-                              <li key={it.productId} className="flex justify-between gap-3">
-                                <span className="break-words min-w-0">
-                                  [{it.productCode}] {it.productName} × {it.quantity}
-                                  {it.selectedNumbers?.length ? ` (เลข ${it.selectedNumbers.map((n) => '#' + n).join(', ')})` : ''}
-                                </span>
-                                <span className="font-tabular shrink-0">฿{it.lineTotal.toLocaleString()}</span>
-                              </li>
-                            ))}
-                          </ul>
-                          <p className="mt-1 flex justify-between border-t border-[#E8E2D5] pt-1 font-bold">
-                            <span>ค่าจัดส่ง ฿{selectedOrder.shippingTotal.toLocaleString()}</span>
-                            <span className="font-tabular">รวม ฿{selectedOrder.grandTotal.toLocaleString()}</span>
+                      {/* Right: who, what to decide, the status fields */}
+                      <div className="space-y-4 min-w-0">
+                        <div className="text-xs space-y-1 bg-[#F7F2E8] p-3 rounded-xl">
+                          <p className="text-sm font-bold text-[#14100A]">
+                            {selectedOrder.customerName}
+                            <span className="font-normal text-[#5A5244]"> · {selectedOrder.organization || 'ประชาชนทั่วไป'}</span>
+                          </p>
+                          <p>
+                            <strong>โทร:</strong> {selectedOrder.customerPhone} · <strong>ยอดรวม:</strong> ฿{selectedOrder.grandTotal.toLocaleString()} บาท
+                          </p>
+                          <p>
+                            <strong>
+                              {selectedOrder.deliveryMethod === 'pickup_bpp' || (selectedOrder.shippingAddress || '').includes('มารับเอง')
+                                ? 'มารับเองที่ บช.ตชด.'
+                                : 'จัดส่งทางไปรษณีย์'}
+                              :
+                            </strong>{' '}
+                            {selectedOrder.shippingAddress || '-'}
                           </p>
                         </div>
-                        <div className="pt-1">
-                          <strong>ประวัติการดำเนินการ:</strong>
-                          <ul className="mt-1 space-y-1 max-h-32 overflow-y-auto">
-                            {selectedOrder.statusHistory.map((h) => (
-                              <li key={h.id} className="text-[11px] text-[#5A5244]">
-                                <span className="font-tabular">{new Date(h.timestamp).toLocaleString('th-TH')}</span> · {h.actor} — {h.note}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    </details>
 
-                    {selectedOrder.paymentStatus === 'verified_paid' && (
+                        {selectedOrder.paymentStatus !== 'payment_rejected' && (
+                          <div className="rounded-xl border border-[#E8E2D5] p-3 space-y-2" role="group" aria-label="ทางลัดตรวจสลิป">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOrderPaymentStatus('verified_paid');
+                                  if (orderPrepStatus === 'awaiting_payment') setOrderPrepStatus('inspecting_artifact');
+                                  setOrderNote(orderNote || 'ตรวจสอบสลิปแล้ว ยอดถูกต้อง ยืนยันการชำระเงิน');
+                                }}
+                                className={`flex-1 min-w-[180px] px-3 py-2.5 min-h-[48px] rounded-lg text-sm font-bold ${
+                                  orderPaymentStatus === 'verified_paid' ? 'bg-emerald-800 text-white ring-2 ring-emerald-300' : 'bg-emerald-700 text-white'
+                                }`}
+                              >
+                                ✓ สลิปถูกต้อง ยืนยันรับชำระ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOrderPaymentStatus('pending_verification');
+                                  setOrderNote('สลิปไม่ชัดเจนหรือยอดไม่ตรง กรุณาแนบสลิปใหม่ที่เมนู “ตรวจสอบสถานะ”');
+                                }}
+                                className="flex-1 min-w-[160px] px-3 py-2.5 min-h-[48px] rounded-lg border border-amber-500 bg-amber-50 text-amber-900 text-sm font-bold"
+                              >
+                                ขอให้แนบสลิปใหม่
+                              </button>
+                            </div>
+                            <p className="text-[11px] text-[#77717C]">
+                              ปุ่มลัดเพียงเลือกค่าให้ ยังไม่บันทึกจนกว่าจะกด “บันทึก” ด้านล่าง ผู้จองเห็นหมายเหตุในหน้าตรวจสอบสถานะ
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="grid sm:grid-cols-3 gap-3 text-xs">
+                          <div>
+                            <label className="block font-semibold mb-1" htmlFor="st-pay">
+                              1. การชำระเงิน
+                            </label>
+                            <select
+                              id="st-pay"
+                              value={orderPaymentStatus}
+                              onChange={(e) => setOrderPaymentStatus(e.target.value as PaymentStatus)}
+                              className="w-full px-2.5 py-2.5 min-h-[44px] border border-[#E8E2D5] rounded-lg bg-white"
+                            >
+                              <option value="pending_verification">รอตรวจสอบยอดชำระเงิน</option>
+                              <option value="verified_paid">ชำระเงินแล้ว (ยืนยันยอดเรียบร้อย)</option>
+                              <option value="payment_rejected">ยกเลิกใบจอง (คืนสต็อก & ปล่อยเลข 1–99)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1" htmlFor="st-prep">
+                              2. การจัดเตรียมวัตถุมงคล
+                            </label>
+                            <select
+                              id="st-prep"
+                              value={orderPrepStatus}
+                              onChange={(e) => setOrderPrepStatus(e.target.value as PreparationStatus)}
+                              className="w-full px-2.5 py-2.5 min-h-[44px] border border-[#E8E2D5] rounded-lg bg-white"
+                            >
+                              <option value="awaiting_payment">รอยืนยันการชำระเงิน</option>
+                              <option value="inspecting_artifact">กำลังคัดตรวจองค์พระและตอกหมายเลข</option>
+                              <option value="packed_ready">บรรจุกล่องพร้อมส่งมอบ</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1" htmlFor="st-ship">
+                              3. การจัดส่ง
+                            </label>
+                            <select
+                              id="st-ship"
+                              value={orderShippingStatus}
+                              onChange={(e) => setOrderShippingStatus(e.target.value as ShippingStatus)}
+                              className="w-full px-2.5 py-2.5 min-h-[44px] border border-[#E8E2D5] rounded-lg bg-white"
+                            >
+                              <option value="not_shipped">ยังไม่จัดส่ง</option>
+                              <option value="in_transit">อยู่ระหว่างจัดส่ง</option>
+                              <option value="delivered">ส่งมอบเรียบร้อยแล้ว</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <label className="block font-semibold mb-1" htmlFor="st-track">
+                              เลขพัสดุไปรษณีย์ (ถ้ามี)
+                            </label>
+                            <input
+                              id="st-track"
+                              type="text"
+                              value={orderTrackingNumber}
+                              onChange={(e) => setOrderTrackingNumber(e.target.value)}
+                              placeholder="เช่น EMS TH-88492019TH"
+                              className="w-full px-3 py-2.5 min-h-[44px] border border-[#E8E2D5] rounded-lg font-tabular"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1" htmlFor="st-note">
+                              หมายเหตุผู้ดูแล
+                            </label>
+                            <input
+                              id="st-note"
+                              type="text"
+                              value={orderNote}
+                              onChange={(e) => setOrderNote(e.target.value)}
+                              placeholder="ระบุหมายเหตุการตรวจสอบ"
+                              className="w-full px-3 py-2.5 min-h-[44px] border border-[#E8E2D5] rounded-lg"
+                            />
+                          </div>
+                        </div>
+
+                        <details className="rounded-xl border border-[#E8E2D5] p-3 text-xs">
+                          <summary className="font-bold text-[#14100A] cursor-pointer min-h-[32px] flex items-center">รายละเอียดผู้ซื้อ รายการ และประวัติ</summary>
+                          <div className="mt-2 space-y-1.5 text-[#29222E]">
+                            <p><strong>วันที่จอง:</strong> {new Date(selectedOrder.createdAt).toLocaleString('th-TH')}{selectedOrder.salesChannel === 'admin' ? ' · เจ้าหน้าที่สร้างให้' : ' · จองผ่านเว็บไซต์'}</p>
+                            <p>
+                              <strong>อีเมล:</strong> {selectedOrder.customerEmail || '-'}
+                              {selectedOrder.receiptEmailedAt && (
+                                <span className="text-emerald-700">
+                                  {' '}· ส่งใบจองแล้วเมื่อ {new Date(selectedOrder.receiptEmailedAt).toLocaleString('th-TH')}
+                                </span>
+                              )}
+                            </p>
+                            <p><strong>รหัสไปรษณีย์:</strong> {selectedOrder.postalCode || '-'}</p>
+                            <p>
+                              <strong>ช่องทางชำระ:</strong>{' '}
+                              {selectedOrder.paymentMethod === 'promptpay' ? 'พร้อมเพย์' : selectedOrder.paymentMethod === 'cash' ? 'เงินสด / ชำระกับเจ้าหน้าที่' : 'โอนบัญชีธนาคาร'}
+                              {selectedOrder.transferReference ? ` (${selectedOrder.transferReference})` : ''}
+                            </p>
+                            {selectedOrder.adminNote && <p><strong>หมายเหตุภายใน:</strong> {selectedOrder.adminNote}</p>}
+                            <div className="pt-1">
+                              <strong>รายการ:</strong>
+                              <ul className="mt-1 space-y-1">
+                                {selectedOrder.items.map((it) => (
+                                  <li key={it.productId} className="flex justify-between gap-3">
+                                    <span className="break-words min-w-0">
+                                      [{it.productCode}] {it.productName} × {it.quantity}
+                                      {it.selectedNumbers?.length ? ` (เลข ${it.selectedNumbers.map((n) => '#' + n).join(', ')})` : ''}
+                                    </span>
+                                    <span className="font-tabular shrink-0">฿{it.lineTotal.toLocaleString()}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                              <p className="mt-1 flex justify-between border-t border-[#E8E2D5] pt-1 font-bold">
+                                <span>ค่าจัดส่ง ฿{selectedOrder.shippingTotal.toLocaleString()}</span>
+                                <span className="font-tabular">รวม ฿{selectedOrder.grandTotal.toLocaleString()}</span>
+                              </p>
+                            </div>
+                            <div className="pt-1">
+                              <strong>ประวัติการดำเนินการ:</strong>
+                              <ul className="mt-1 space-y-1 max-h-32 overflow-y-auto">
+                                {selectedOrder.statusHistory.map((h) => (
+                                  <li key={h.id} className="text-[11px] text-[#5A5244]">
+                                    <span className="font-tabular">{new Date(h.timestamp).toLocaleString('th-TH')}</span> · {h.actor} — {h.note}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        </details>
+
+                        {selectedOrder.paymentStatus === 'verified_paid' && (
                       <section className="rounded-xl border border-[#C9A45C] bg-[#FFF9EA] p-3 space-y-2.5 text-xs text-[#29222E]" aria-label="ส่งใบจองที่ลงนามแล้ว">
                         <p className="font-bold text-sm text-[#14100A]">ใบจองที่ลงนามแล้ว</p>
                         {selectedOrder.receiptEmailedAt && (
@@ -1522,37 +1676,58 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           </div>
                         </details>
                       </section>
-                    )}
+                        )}
 
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={handleDeleteOrder}
-                        disabled={deleteBusy}
-                        className="px-3 py-2 min-h-[40px] rounded-lg border border-red-300 bg-red-50 text-red-800 text-xs font-bold inline-flex items-center gap-1.5 hover:bg-red-100 disabled:opacity-60"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        {deleteBusy ? 'กำลังลบ...' : 'ลบใบจองนี้ (เช่น ใบจองทดลอง)'}
-                      </button>
+                        <details className="text-xs">
+                          <summary className="cursor-pointer text-[#77717C] min-h-[32px] flex items-center">ตัวเลือกอื่น</summary>
+                          <div className="pt-1">
+                            <button
+                              type="button"
+                              onClick={handleDeleteOrder}
+                              disabled={deleteBusy}
+                              className="px-3 py-2 min-h-[40px] rounded-lg border border-red-300 bg-red-50 text-red-800 text-xs font-bold inline-flex items-center gap-1.5 hover:bg-red-100 disabled:opacity-60"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              {deleteBusy ? 'กำลังลบ...' : 'ลบใบจองนี้ (เช่น ใบจองทดลอง)'}
+                            </button>
+                          </div>
+                        </details>
+                      </div>
                     </div>
 
-                    <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-3 bg-white border-t border-[#E8E2D5] rounded-b-2xl flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedOrder(null)}
-                        className="px-4 py-2 border border-[#E8E2D5] rounded-lg text-xs font-medium"
-                      >
-                        ยกเลิก
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-5 py-2 bg-[#14100A] text-[#FCE694] rounded-lg text-xs font-bold hover:bg-[#8A6D2F]"
-                      >
-                        บันทึกสถานะใบจอง
-                      </button>
+                    {/* Always-visible action bar: shows whether anything is waiting to be saved */}
+                    <div className="sticky bottom-0 px-4 sm:px-6 py-3 bg-white border-t border-[#E8E2D5] rounded-b-2xl flex flex-wrap items-center justify-between gap-2">
+                      <p className={`text-xs font-semibold ${orderDirty ? 'text-amber-800' : 'text-[#77717C]'}`} aria-live="polite">
+                        {orderDirty ? '● มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก' : 'ยังไม่มีการเปลี่ยนแปลง'}
+                      </p>
+                      <div className="w-full sm:w-auto grid grid-cols-[auto_1fr] sm:flex sm:flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOrder(null)}
+                          className="px-4 py-2.5 min-h-[44px] border border-[#E8E2D5] rounded-lg text-xs font-medium"
+                        >
+                          ปิด
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2.5 min-h-[44px] bg-[#14100A] text-[#FCE694] rounded-lg text-xs font-bold hover:bg-[#8A6D2F]"
+                        >
+                          บันทึกสถานะใบจอง
+                        </button>
+                        {nextOrder && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateOrderStatus(null, true)}
+                            className="col-span-2 sm:col-span-1 px-4 py-2.5 min-h-[44px] bg-emerald-700 text-white rounded-lg text-xs font-bold hover:bg-emerald-800"
+                          >
+                            บันทึกแล้วไปใบถัดไป ›
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </form>
-                </div>
+                </div>,
+                document.body,
               )}
             </div>
           )}
