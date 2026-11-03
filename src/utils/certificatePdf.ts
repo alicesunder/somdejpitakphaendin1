@@ -274,7 +274,19 @@ export async function buildCertificatePdf(order: OrderRecord, config: SiteConfig
   return new Blob([bytes as BlobPart], { type: 'application/pdf' });
 }
 
-export const certificateFileName = (order: OrderRecord) => `ใบจอง-${order.orderNumber}.pdf`;
+/** Loads the signature once and returns a function that makes each order's certificate as a data URL. */
+export async function createCertificateMaker(adminToken: string, config: SiteConfig) {
+  const res = await fetch('/api/admin/signature', { headers: { Authorization: `Bearer ${adminToken}` } });
+  const sig = await res.json().catch(() => null);
+  if (!res.ok || !sig?.dataUrl) throw new Error('โหลดลายเซ็นไม่สำเร็จ');
+  const assets = await loadCertificateAssets(sig.dataUrl);
+  return async (order: OrderRecord) => {
+    const blob = await buildCertificatePdf(order, config, assets);
+    return { name: certificateFileName(order), dataUrl: await blobToDataUrl(blob) };
+  };
+}
+
+export const certificateFileName =(order: OrderRecord) => `ใบจอง-${order.orderNumber}.pdf`;
 
 export function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {

@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom';
 import { ReservationCertificate } from './ReservationCertificate';
 import { VisitStatsCard } from './VisitStatsCard';
 import { OrderPdfExport } from './OrderPdfExport';
+import { BulkConfirmDialog } from './BulkConfirmDialog';
+import { slipBucket, slipFailReason } from '../utils/orderBuckets';
 import { bangkokDay, paidAt } from '../utils/orderPdf';
 import { compressSlipImage } from '../utils/slipImage';
 import {
@@ -481,7 +483,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [slipZoom, setSlipZoom] = useState(false);
   const [newOrderOpen, setNewOrderOpen] = useState(false);
   const [orderSearch, setOrderSearch] = useState('');
-  const [orderFilter, setOrderFilter] = useState<'all' | 'slip_wait' | 'no_slip' | 'paid' | 'rejected'>('all');
+  const [orderFilter, setOrderFilter] = useState<'all' | 'ready' | 'failed' | 'no_slip' | 'paid' | 'rejected'>('all');
+  const [bulkIds, setBulkIds] = useState<string[]>([]);
+  const [bulkOrders, setBulkOrders] = useState<OrderRecord[] | null>(null);
 
   const [dayFilter, setDayFilter] = useState(''); // yyyy-mm-dd (Thailand time); '' = every day
   const [dayBasis, setDayBasis] = useState<'booked' | 'paid'>('booked');
@@ -505,10 +509,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     const list = dayOrders;
     return {
       all: list.length,
-      slip_wait: list.filter((o) => o.paymentStatus === 'pending_verification' && o.slipUploadedAt).length,
-      no_slip: list.filter((o) => o.paymentStatus === 'pending_verification' && !o.slipUploadedAt).length,
-      paid: list.filter((o) => o.paymentStatus === 'verified_paid').length,
-      rejected: list.filter((o) => o.paymentStatus === 'payment_rejected').length,
+      ready: list.filter((o) => slipBucket(o) === 'ready').length,
+      failed: list.filter((o) => slipBucket(o) === 'failed').length,
+      no_slip: list.filter((o) => slipBucket(o) === 'no_slip').length,
+      paid: list.filter((o) => slipBucket(o) === 'paid').length,
+      rejected: list.filter((o) => slipBucket(o) === 'rejected').length,
     };
   }, [dayOrders]);
 
@@ -516,10 +521,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     const q = orderSearch.trim().toLowerCase();
     const qDigits = q.replace(/\D/g, '');
     return dayOrders.filter((o) => {
-      if (orderFilter === 'slip_wait' && !(o.paymentStatus === 'pending_verification' && o.slipUploadedAt)) return false;
-      if (orderFilter === 'no_slip' && !(o.paymentStatus === 'pending_verification' && !o.slipUploadedAt)) return false;
-      if (orderFilter === 'paid' && o.paymentStatus !== 'verified_paid') return false;
-      if (orderFilter === 'rejected' && o.paymentStatus !== 'payment_rejected') return false;
+      if (orderFilter !== 'all' && slipBucket(o) !== orderFilter) return false;
       if (!q) return true;
       return (
         o.orderNumber.toLowerCase().includes(q) ||
@@ -535,6 +537,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const selectedIndex = selectedOrder ? filteredOrders.findIndex((o) => o.id === selectedOrder.id) : -1;
   const prevOrder = selectedIndex > 0 ? filteredOrders[selectedIndex - 1] : null;
   const nextOrder = selectedIndex >= 0 && selectedIndex < filteredOrders.length - 1 ? filteredOrders[selectedIndex + 1] : null;
+  // A new view means a new selection.
+  useEffect(() => {
+    setBulkIds([]);
+  }, [orderFilter, dayFilter, dayBasis, orderSearch]);
+  const BULK_MAX = 100;
+  const bulkSet = new Set(bulkIds);
+  const bulkSelected = filteredOrders.filter((o) => bulkSet.has(o.id));
+  const bulkTotal = bulkSelected.reduce((sum, o) => sum + o.grandTotal, 0);
+  const allBulkSelected = filteredOrders.length > 0 && bulkSelected.length === Math.min(filteredOrders.length, BULK_MAX);
+  const toggleAllBulk = () => setBulkIds(allBulkSelected ? [] : filteredOrders.slice(0, BULK_MAX).map((o) => o.id));
+  const toggleBulk = (id: string) =>
+    setBulkIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= BULK_MAX ? cur : [...cur, id]));
   const orderDirty = Boolean(
     selectedOrder &&
       (orderPaymentStatus !== selectedOrder.paymentStatus ||
@@ -572,6 +586,30 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedOrder, slipZoom]);
+
+  const handleSlipReview = async (mode: 'failed' | 'clear') => {
+    if (!adminToken || !selectedOrder) return;
+    const goTo = mode === 'failed' ? nextOrder : null;
+    const res = await fetch(`/api/admin/orders/${selectedOrder.id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ slipReview: mode, note: orderNote.trim() || undefined }),
+    });
+    if (res.ok) {
+      await fetchDashboard(adminToken);
+      onStoreUpdated();
+      showToast(
+        mode === 'failed'
+          ? `ย้าย ${selectedOrder.orderNumber} ไปช่อง “ไม่ผ่าน” แล้ว`
+          : `ย้าย ${selectedOrder.orderNumber} กลับไปรอตรวจแล้ว`
+      );
+      if (goTo) handleOpenOrderModal(goTo);
+      else setSelectedOrder(null);
+    } else {
+      const data = await res.json().catch(() => null);
+      showToast((data && data.error) || 'ย้ายใบจองไม่สำเร็จ กรุณาลองอีกครั้ง', 6000);
+    }
+  };
 
   const handleOpenOrderModal = (order: OrderRecord) => {
     setSlipView({ state: 'none' });
@@ -1094,9 +1132,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <div className="flex flex-wrap gap-2" role="group" aria-label="กรองสถานะ">
                 {([
                   ['all', 'ทั้งหมด'],
-                  ['slip_wait', '📎 แนบสลิปแล้ว รอตรวจ'],
+                  ['ready', '📎 รอตรวจ (ยอดตรง)'],
+                  ['failed', '⚠ ไม่ผ่าน'],
                   ['no_slip', 'ยังไม่แนบสลิป'],
-                  ['paid', 'ชำระแล้ว'],
+                  ['paid', '✓ ผ่านแล้ว'],
                   ['rejected', 'ยกเลิก'],
                 ] as const).map(([k, l]) => (
                   <button
@@ -1130,6 +1169,33 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </button>
                 )}
               </div>
+              {orderFilter === 'ready' && filteredOrders.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-xs">
+                  <label className="inline-flex items-center gap-2 font-semibold cursor-pointer">
+                    <input type="checkbox" checked={allBulkSelected} onChange={toggleAllBulk} className="w-4 h-4" />
+                    เลือกทั้งหมดที่แสดง ({Math.min(filteredOrders.length, BULK_MAX)})
+                  </label>
+                  <span className="text-emerald-900">
+                    เลือกแล้ว <strong>{bulkSelected.length}</strong> ใบ · ฿{bulkTotal.toLocaleString('th-TH')}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={bulkSelected.length === 0}
+                    onClick={() => setBulkOrders(bulkSelected)}
+                    className="ml-auto px-4 py-2.5 min-h-[44px] rounded-lg bg-emerald-700 text-white font-bold disabled:opacity-40"
+                  >
+                    ✓ ยืนยันชำระที่เลือก ({bulkSelected.length})
+                  </button>
+                  {filteredOrders.length > BULK_MAX && (
+                    <p className="w-full text-emerald-900">ยืนยันได้ครั้งละไม่เกิน {BULK_MAX} ใบ ทำรอบแรกเสร็จแล้วใบที่เหลือจะยังอยู่ในช่องนี้</p>
+                  )}
+                </div>
+              )}
+              {orderFilter === 'failed' && filteredOrders.length > 0 && (
+                <p className="text-xs text-[#5A5244]">
+                  ช่อง “ไม่ผ่าน” คือสลิปที่ยอดที่แจ้งไม่ตรง ไม่ระบุยอด หรือเจ้าหน้าที่คัดออก ใบเหล่านี้ยังไม่ถูกยกเลิก (เลขและสต็อกยังจองไว้) เปิดแต่ละใบเพื่อตรวจสลิป ยืนยัน หรือขอให้แนบใหม่
+                </p>
+              )}
               {filteredOrders.length === 0 && (
                 <p className="text-sm text-[#77717C] py-6 text-center">ไม่พบใบจองที่ตรงกับเงื่อนไข</p>
               )}
@@ -1138,6 +1204,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-[#F7F2E8] border-b border-[#E8E2D5] text-[#14100A] font-semibold">
+                      {orderFilter === 'ready' && <th className="p-3.5 w-8" aria-label="เลือก" />}
                       <th className="p-3.5">เลขที่ใบจอง / วันที่</th>
                       <th className="p-3.5">ชื่อผู้จอง / หน่วยงาน / เบอร์โทร</th>
                       <th className="p-3.5">รายการที่จอง & เลขชุด ช1</th>
@@ -1149,6 +1216,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <tbody className="divide-y divide-[#E8E2D5]">
                     {filteredOrders.map((ord) => (
                       <tr key={ord.id} className="hover:bg-[#F7F2E8]/40">
+                        {orderFilter === 'ready' && (
+                          <td className="p-3.5 align-top">
+                            <input
+                              type="checkbox"
+                              checked={bulkSet.has(ord.id)}
+                              onChange={() => toggleBulk(ord.id)}
+                              aria-label={`เลือก ${ord.orderNumber}`}
+                              className="w-5 h-5"
+                            />
+                          </td>
+                        )}
                         <td className="p-3.5 align-top">
                           <p className="font-tabular font-bold text-[#14100A]">
                             {ord.orderNumber}
@@ -1237,8 +1315,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                               ? 'ยกเลิกใบจอง (ปล่อยเลขแล้ว)'
                               : 'รอตรวจสอบการชำระเงิน'}
                           </span>
-                          {ord.slipUploadedAt && ord.paymentStatus === 'pending_verification' && (
-                            <span className="mt-1 block text-[11px] font-bold text-sky-800">📎 แนบสลิปแล้ว — รอตรวจ</span>
+                          {slipFailReason(ord) ? (
+                            <span className="mt-1 block text-[11px] font-bold text-red-800">⚠ ไม่ผ่าน — {slipFailReason(ord)}</span>
+                          ) : (
+                            ord.slipUploadedAt &&
+                            ord.paymentStatus === 'pending_verification' && (
+                              <span className="mt-1 block text-[11px] font-bold text-sky-800">📎 แนบสลิปแล้ว ยอดตรง — รอตรวจ</span>
+                            )
                           )}
                           {!ord.slipUploadedAt && ord.paymentStatus === 'pending_verification' && (
                             <span className="mt-1 block text-[11px] text-[#77717C]">ยังไม่แนบสลิป</span>
@@ -1259,6 +1342,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </tbody>
                 </table>
               </div>
+
+              {bulkOrders && adminToken && dashboardData && (
+                <BulkConfirmDialog
+                  orders={bulkOrders}
+                  adminToken={adminToken}
+                  siteConfig={dashboardData.siteConfig}
+                  mailConfigured={Boolean(dashboardData.mailConfigured)}
+                  onClose={async (changed) => {
+                    setBulkOrders(null);
+                    if (changed) {
+                      setBulkIds([]);
+                      setSelectedOrder(null);
+                      await fetchDashboard(adminToken);
+                      onStoreUpdated();
+                    }
+                  }}
+                />
+              )}
 
               {newOrderOpen && adminToken && dashboardData && createPortal(
                 <AdminNewOrderModal
@@ -1423,6 +1524,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
                         {selectedOrder.paymentStatus !== 'payment_rejected' && (
                           <div className="rounded-xl border border-[#E8E2D5] p-3 space-y-2" role="group" aria-label="ทางลัดตรวจสลิป">
+                            {slipFailReason(selectedOrder) && (
+                              <p className="rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs font-semibold px-3 py-2">
+                                ⚠ อยู่ในช่อง “ไม่ผ่าน” — {slipFailReason(selectedOrder)}
+                              </p>
+                            )}
+                            {slipBucket(selectedOrder) === 'ready' && (
+                              <button
+                                type="button"
+                                onClick={() => setBulkOrders([selectedOrder])}
+                                className="w-full px-3 py-3 min-h-[52px] rounded-lg bg-emerald-800 text-white text-sm font-bold ring-2 ring-emerald-300"
+                              >
+                                ✓ ยืนยันชำระ + ส่งอีเมลทันที (กดครั้งเดียว)
+                              </button>
+                            )}
                             <div className="flex flex-wrap gap-2">
                               <button
                                 type="button"
@@ -1447,6 +1562,25 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                               >
                                 ขอให้แนบสลิปใหม่
                               </button>
+                              {selectedOrder.paymentStatus === 'pending_verification' &&
+                                selectedOrder.slipUploadedAt &&
+                                (selectedOrder.slipReview === 'failed' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSlipReview('clear')}
+                                    className="flex-1 min-w-[160px] px-3 py-2.5 min-h-[48px] rounded-lg border border-[#E8E2D5] bg-white text-[#29222E] text-sm font-bold"
+                                  >
+                                    ↩ ย้ายกลับไปรอตรวจ
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSlipReview('failed')}
+                                    className="flex-1 min-w-[160px] px-3 py-2.5 min-h-[48px] rounded-lg border border-red-300 bg-red-50 text-red-800 text-sm font-bold"
+                                  >
+                                    ✗ ย้ายไปช่อง “ไม่ผ่าน”
+                                  </button>
+                                ))}
                             </div>
                             <p className="text-[11px] text-[#77717C]">
                               ปุ่มลัดเพียงเลือกค่าให้ ยังไม่บันทึกจนกว่าจะกด “บันทึก” ด้านล่าง ผู้จองเห็นหมายเหตุในหน้าตรวจสอบสถานะ

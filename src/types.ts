@@ -151,6 +151,8 @@ export interface OrderRecord {
   slipCount?: number;
   slipTransferAmount?: number;
   slipTransferTime?: string;
+  /** Set by staff to move the order to the "ไม่ผ่าน" box; cleared when a new slip arrives or payment is confirmed */
+  slipReview?: 'failed';
   /** When the reservation certificate was last emailed to customerEmail */
   receiptEmailedAt?: string;
   items: OrderLineItem[];

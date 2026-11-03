@@ -2539,6 +2539,7 @@ function createApp() {
       order.slipCount = (order.slipCount || 0) + 1;
       order.slipTransferAmount = Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : void 0;
       order.slipTransferTime = when || void 0;
+      order.slipReview = void 0;
       order.statusHistory.unshift({
         id: `log-${Date.now()}`,
         timestamp: nowIso,
@@ -2958,6 +2959,46 @@ function createApp() {
       res.status(500).json({ error: "\u0E40\u0E1B\u0E34\u0E14\u0E2A\u0E25\u0E34\u0E1B\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08" });
     }
   });
+  app2.post("/api/admin/orders/bulk-confirm", requireAdmin, (req, res) => {
+    const ids = Array.isArray(req.body?.ids) ? [...new Set(req.body.ids.filter((x) => typeof x === "string" && x.length < 80))].slice(0, 100) : [];
+    if (ids.length === 0) {
+      res.status(400).json({ error: "\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E43\u0E1A\u0E08\u0E2D\u0E07" });
+      return;
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const confirmed = [];
+    const skipped = [];
+    ids.forEach((id, i) => {
+      const o = store.orders.find((x) => x.id === id);
+      let reason = "";
+      if (!o) reason = "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E43\u0E1A\u0E08\u0E2D\u0E07";
+      else if (o.paymentStatus !== "pending_verification") reason = "\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48\u0E23\u0E2D\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A";
+      else if (!o.slipUploadedAt) reason = "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E41\u0E19\u0E1A\u0E2A\u0E25\u0E34\u0E1B";
+      else if (o.slipReview === "failed") reason = "\u0E16\u0E39\u0E01\u0E04\u0E31\u0E14\u0E44\u0E1B\u0E0A\u0E48\u0E2D\u0E07 \u201C\u0E44\u0E21\u0E48\u0E1C\u0E48\u0E32\u0E19\u201D";
+      else if (o.slipTransferAmount === void 0 || Math.abs(o.slipTransferAmount - o.grandTotal) >= 5e-3) {
+        reason = "\u0E22\u0E2D\u0E14\u0E17\u0E35\u0E48\u0E41\u0E08\u0E49\u0E07\u0E44\u0E21\u0E48\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E22\u0E2D\u0E14\u0E43\u0E1A\u0E08\u0E2D\u0E07";
+      }
+      if (!o || reason) {
+        skipped.push({ id, reason });
+        return;
+      }
+      o.paymentStatus = "verified_paid";
+      if (o.preparationStatus === "awaiting_payment") o.preparationStatus = "inspecting_artifact";
+      o.slipReview = void 0;
+      o.statusHistory.unshift({
+        id: `log-${Date.now()}-${i}`,
+        timestamp: nowIso,
+        actor: "\u0E1C\u0E39\u0E49\u0E14\u0E39\u0E41\u0E25\u0E04\u0E25\u0E31\u0E07\u0E27\u0E31\u0E15\u0E16\u0E38\u0E21\u0E07\u0E04\u0E25 (Admin)",
+        paymentStatus: o.paymentStatus,
+        preparationStatus: o.preparationStatus,
+        shippingStatus: o.shippingStatus,
+        note: "\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E01\u0E32\u0E23\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E41\u0E1A\u0E1A\u0E01\u0E25\u0E38\u0E48\u0E21 (\u0E22\u0E2D\u0E14\u0E17\u0E35\u0E48\u0E41\u0E08\u0E49\u0E07\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E43\u0E1A\u0E08\u0E2D\u0E07 \u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E27\u0E08\u0E01\u0E31\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E40\u0E07\u0E34\u0E19\u0E40\u0E02\u0E49\u0E32\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E41\u0E25\u0E49\u0E27)"
+      });
+      confirmed.push(id);
+    });
+    if (confirmed.length > 0) saveStore(store);
+    res.json({ confirmed, skipped });
+  });
   app2.patch("/api/admin/orders/:id/status", requireAdmin, (req, res) => {
     const order = store.orders.find((o) => o.id === req.params.id);
     if (!order) {
@@ -2971,11 +3012,15 @@ function createApp() {
       shippingStatus,
       trackingNumber,
       carrierName,
-      note
+      note,
+      slipReview
     } = req.body || {};
     if (paymentStatus) {
       order.paymentStatus = paymentStatus;
     }
+    if (slipReview === "failed") order.slipReview = "failed";
+    else if (slipReview === "clear") order.slipReview = void 0;
+    if (order.paymentStatus === "verified_paid") order.slipReview = void 0;
     if (preparationStatus) {
       order.preparationStatus = preparationStatus;
     }
@@ -2998,7 +3043,7 @@ function createApp() {
       paymentStatus: order.paymentStatus,
       preparationStatus: order.preparationStatus,
       shippingStatus: order.shippingStatus,
-      note: String(note || "").trim() || `\u0E1B\u0E23\u0E31\u0E1A\u0E1B\u0E23\u0E38\u0E07\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E43\u0E1A\u0E08\u0E2D\u0E07${order.trackingNumber ? ` (\u0E40\u0E25\u0E02\u0E1E\u0E31\u0E2A\u0E14\u0E38: ${order.trackingNumber})` : ""}`
+      note: String(note || "").trim() || (slipReview === "failed" ? "\u0E2A\u0E25\u0E34\u0E1B\u0E44\u0E21\u0E48\u0E1C\u0E48\u0E32\u0E19\u0E01\u0E32\u0E23\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A (\u0E04\u0E31\u0E14\u0E44\u0E1B\u0E0A\u0E48\u0E2D\u0E07 \u201C\u0E44\u0E21\u0E48\u0E1C\u0E48\u0E32\u0E19\u201D) \u0E01\u0E23\u0E38\u0E13\u0E32\u0E41\u0E19\u0E1A\u0E2A\u0E25\u0E34\u0E1B\u0E43\u0E2B\u0E21\u0E48\u0E2B\u0E23\u0E37\u0E2D\u0E15\u0E34\u0E14\u0E15\u0E48\u0E2D\u0E40\u0E08\u0E49\u0E32\u0E2B\u0E19\u0E49\u0E32\u0E17\u0E35\u0E48" : slipReview === "clear" ? "\u0E22\u0E49\u0E32\u0E22\u0E01\u0E25\u0E31\u0E1A\u0E44\u0E1B\u0E23\u0E2D\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E2A\u0E25\u0E34\u0E1B" : "") || `\u0E1B\u0E23\u0E31\u0E1A\u0E1B\u0E23\u0E38\u0E07\u0E2A\u0E16\u0E32\u0E19\u0E30\u0E43\u0E1A\u0E08\u0E2D\u0E07${order.trackingNumber ? ` (\u0E40\u0E25\u0E02\u0E1E\u0E31\u0E2A\u0E14\u0E38: ${order.trackingNumber})` : ""}`
     });
     saveStore(store);
     res.json({ order, rajaSlots: enrichRajaSlotsForAdmin() });

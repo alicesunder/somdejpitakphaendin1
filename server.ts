@@ -971,6 +971,7 @@ export function createApp() {
       order.slipCount = (order.slipCount || 0) + 1;
       order.slipTransferAmount = Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : undefined;
       order.slipTransferTime = when || undefined;
+      order.slipReview = undefined;
       order.statusHistory.unshift({
         id: `log-${Date.now()}`,
         timestamp: nowIso,
@@ -1490,6 +1491,52 @@ export function createApp() {
     }
   });
 
+  // 8b. Confirm payment for many orders at once. Only orders that are still pending, have a slip, were
+  // not flagged "ไม่ผ่าน" and whose stated amount equals the order total are changed; every other id is
+  // reported back untouched with the reason. Nothing is cancelled or released here.
+  app.post('/api/admin/orders/bulk-confirm', requireAdmin, (req, res) => {
+    const ids: string[] = Array.isArray(req.body?.ids)
+      ? [...new Set<string>(req.body.ids.filter((x: unknown): x is string => typeof x === 'string' && x.length < 80))].slice(0, 100)
+      : [];
+    if (ids.length === 0) {
+      res.status(400).json({ error: 'ไม่ได้เลือกใบจอง' });
+      return;
+    }
+    const nowIso = new Date().toISOString();
+    const confirmed: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+    ids.forEach((id, i) => {
+      const o = store.orders.find((x) => x.id === id);
+      let reason = '';
+      if (!o) reason = 'ไม่พบใบจอง';
+      else if (o.paymentStatus !== 'pending_verification') reason = 'สถานะไม่ใช่รอตรวจสอบ';
+      else if (!o.slipUploadedAt) reason = 'ยังไม่แนบสลิป';
+      else if (o.slipReview === 'failed') reason = 'ถูกคัดไปช่อง “ไม่ผ่าน”';
+      else if (o.slipTransferAmount === undefined || Math.abs(o.slipTransferAmount - o.grandTotal) >= 0.005) {
+        reason = 'ยอดที่แจ้งไม่ตรงกับยอดใบจอง';
+      }
+      if (!o || reason) {
+        skipped.push({ id, reason });
+        return;
+      }
+      o.paymentStatus = 'verified_paid';
+      if (o.preparationStatus === 'awaiting_payment') o.preparationStatus = 'inspecting_artifact';
+      o.slipReview = undefined;
+      o.statusHistory.unshift({
+        id: `log-${Date.now()}-${i}`,
+        timestamp: nowIso,
+        actor: 'ผู้ดูแลคลังวัตถุมงคล (Admin)',
+        paymentStatus: o.paymentStatus,
+        preparationStatus: o.preparationStatus,
+        shippingStatus: o.shippingStatus,
+        note: 'ยืนยันการชำระเงินแบบกลุ่ม (ยอดที่แจ้งตรงกับใบจอง เจ้าหน้าที่ตรวจกับรายการเงินเข้าบัญชีแล้ว)',
+      });
+      confirmed.push(id);
+    });
+    if (confirmed.length > 0) saveStore(store);
+    res.json({ confirmed, skipped });
+  });
+
   // 9. Admin Order Status & Tracking Update (With Audit Trail & Raja Slot Release on Reject)
   app.patch('/api/admin/orders/:id/status', requireAdmin, (req, res) => {
     const order = store.orders.find((o) => o.id === req.params.id);
@@ -1506,11 +1553,16 @@ export function createApp() {
       trackingNumber,
       carrierName,
       note,
+      slipReview,
     } = req.body || {};
 
     if (paymentStatus) {
       order.paymentStatus = paymentStatus as PaymentStatus;
     }
+    if (slipReview === 'failed') order.slipReview = 'failed';
+    else if (slipReview === 'clear') order.slipReview = undefined;
+    // Confirming the payment settles any earlier "ไม่ผ่าน" flag.
+    if (order.paymentStatus === 'verified_paid') order.slipReview = undefined;
     if (preparationStatus) {
       order.preparationStatus = preparationStatus as PreparationStatus;
     }
@@ -1541,6 +1593,11 @@ export function createApp() {
       shippingStatus: order.shippingStatus,
       note:
         String(note || '').trim() ||
+        (slipReview === 'failed'
+          ? 'สลิปไม่ผ่านการตรวจสอบ (คัดไปช่อง “ไม่ผ่าน”) กรุณาแนบสลิปใหม่หรือติดต่อเจ้าหน้าที่'
+          : slipReview === 'clear'
+          ? 'ย้ายกลับไปรอตรวจสอบสลิป'
+          : '') ||
         `ปรับปรุงสถานะใบจอง${
           order.trackingNumber ? ` (เลขพัสดุ: ${order.trackingNumber})` : ''
         }`,
