@@ -183,7 +183,7 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
   );
 
   const main = (
-    <div role="dialog" aria-modal="true" aria-label="ยืนยันการชำระเงิน" className="fixed inset-0 z-[70] bg-black/70 flex items-start justify-center p-3 overflow-y-auto">
+    <div role="dialog" aria-modal="true" aria-label="ยืนยันการชำระเงิน" className="fixed inset-0 z-[70] bg-black/70 flex items-start justify-center p-3 overflow-y-auto text-[#14100A]">
       <div className={`bg-white border border-[#E8E2D5] rounded-2xl w-full ${single ? 'max-w-lg' : 'max-w-2xl'} my-auto p-5 space-y-4 text-sm`}>
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-serif-heritage text-lg font-bold text-[#14100A]">

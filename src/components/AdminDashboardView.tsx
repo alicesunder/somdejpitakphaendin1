@@ -1443,7 +1443,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   role="dialog"
                   aria-modal="true"
                   aria-label={`อัปเดตสถานะใบจอง ${selectedOrder.orderNumber}`}
-                  className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-2 sm:p-4 overflow-y-auto"
+                  className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-2 sm:p-4 overflow-y-auto text-[#14100A]"
                 >
                   <form
                     onSubmit={(e) => handleUpdateOrderStatus(e)}

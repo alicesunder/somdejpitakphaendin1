@@ -121,7 +121,7 @@ export const AdminNewOrderModal: React.FC<Props> = ({
   );
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="สร้างใบจองใหม่" className="fixed inset-0 z-50 bg-black/70 flex items-start sm:items-center justify-center p-3 overflow-y-auto">
+    <div role="dialog" aria-modal="true" aria-label="สร้างใบจองใหม่" className="fixed inset-0 z-50 bg-black/70 flex items-start sm:items-center justify-center p-3 overflow-y-auto text-[#14100A]">
       <div className="bg-white rounded-2xl w-full max-w-3xl my-4 border border-[#E8E2D5]">
         <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-[#E8E2D5]">
           <div>
