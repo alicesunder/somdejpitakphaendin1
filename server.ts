@@ -40,6 +40,7 @@ import { HitFn, memoryHit, rateLimiter } from './server/rateLimit';
 import { isVisitorId, memoryVisits, type VisitStore } from './server/visits';
 import { BOOKING_CLOSED_MESSAGE, SALES_PAUSED_MESSAGE, isBookingOpen } from './src/config/booking';
 import { isMailConfigured, isValidEmail, sendReceiptEmail } from './server/mailer';
+import { SIGNATURE_PNG_BASE64 } from './server/assets/signature';
 
 interface StoreData {
   siteConfig: SiteConfig;
@@ -461,7 +462,8 @@ export function createApp() {
           req.path === '/admin/login' ||
           req.path === '/visit' ||
           req.path === '/admin/visits' ||
-          req.path === '/admin/slips/batch'
+          req.path === '/admin/slips/batch' ||
+          req.path === '/admin/signature'
         ) {
           next();
           return;
@@ -1090,7 +1092,13 @@ export function createApp() {
     }
   });
 
-  app.get('/api/admin/visits', requireAdmin, async (_req, res) => {
+  // The officer's signature for the certificate PDF the admin's browser builds. Admin only, not cached.
+  app.get('/api/admin/signature', requireAdmin, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ dataUrl: `data:image/png;base64,${SIGNATURE_PNG_BASE64}` });
+  });
+
+  app.get('/api/admin/visits',requireAdmin, async (_req, res) => {
     try {
       res.json(await visitStore.stats());
     } catch (err) {

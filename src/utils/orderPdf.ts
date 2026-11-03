@@ -14,7 +14,7 @@ const PX_H = 1754;
 const PT_W = 595.28;
 const PT_H = 841.89;
 const M = 70;
-const SANS = "'IBM Plex Sans Thai', 'Noto Sans Thai', Tahoma, sans-serif";
+export const SANS = "'IBM Plex Sans Thai', 'Noto Sans Thai', Tahoma, sans-serif";
 const INK = '#18140E';
 const MUTED = '#6B6458';
 const RULE = '#C9A45C';
@@ -63,7 +63,7 @@ const SHIP_LABEL: Record<string, string> = { not_shipped: 'ยังไม่จ
 // Thai has no spaces, so break lines between dictionary words (Intl.Segmenter) instead of in the
 // middle of one; falls back to breaking by character where the browser has no Thai dictionary.
 const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new (Intl as any).Segmenter('th', { granularity: 'word' }) : null;
-function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines = 3): string[] {
+export function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines = 3): string[] {
   if (!segmenter) return wrapByChar(ctx, text, maxWidth, maxLines);
   const words: string[] = Array.from(segmenter.segment(text), (x: { segment: string }) => x.segment);
   const lines: string[] = [];
@@ -87,13 +87,13 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, max
   }
   if (lines.length < maxLines && line) lines.push(line.trimEnd());
   const used = lines.join("").length;
-  if (lines.length === maxLines && used < text.replace(/s/g, "").length - 1) {
+  if (lines.length === maxLines && used < text.replace(/\s/g, "").length - 1) {
     lines[maxLines - 1] = lines[maxLines - 1].replace(/.$/, '…');
   }
   return lines.length ? lines : [""];
 }
 
-async function loadFonts() {
+export async function loadFonts() {
   try {
     await Promise.all([400, 600, 700, 800].map((w) => document.fonts.load(`${w} 30px ${SANS}`)));
     await document.fonts.ready;

@@ -268,8 +268,57 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
-  const handleSendReceipt = async () => {
-    if (!adminToken || !selectedOrder || !receiptFile || receiptBusy) return;
+  /** The system builds the certificate with the officer's signature and sends it; no scanning needed. */
+  const buildCertificateFile = async () => {
+    if (!adminToken || !selectedOrder || !dashboardData) throw new Error('ยังไม่พร้อม');
+    const sigRes = await fetch('/api/admin/signature', { headers: { Authorization: `Bearer ${adminToken}` } });
+    const sig = await sigRes.json().catch(() => null);
+    if (!sigRes.ok || !sig?.dataUrl) throw new Error('โหลดลายเซ็นไม่สำเร็จ');
+    const { loadCertificateAssets, buildCertificatePdf, certificateFileName, blobToDataUrl } = await import('../utils/certificatePdf');
+    const assets = await loadCertificateAssets(sig.dataUrl);
+    const blob = await buildCertificatePdf(selectedOrder, dashboardData.siteConfig, assets);
+    return { blob, name: certificateFileName(selectedOrder), toDataUrl: () => blobToDataUrl(blob) };
+  };
+
+  const handleSendCertificate = async () => {
+    if (!selectedOrder || receiptBusy) return;
+    setReceiptError('');
+    setReceiptBusy(true);
+    try {
+      const cert = await buildCertificateFile();
+      const dataUrl = await cert.toDataUrl();
+      setReceiptBusy(false);
+      await handleSendReceipt({ name: cert.name, dataUrl });
+    } catch (err) {
+      setReceiptError(err instanceof Error ? err.message : 'สร้างใบจองไม่สำเร็จ');
+      setReceiptBusy(false);
+    }
+  };
+
+  const handleDownloadCertificate = async () => {
+    if (!selectedOrder || receiptBusy) return;
+    setReceiptError('');
+    setReceiptBusy(true);
+    try {
+      const cert = await buildCertificateFile();
+      const url = URL.createObjectURL(cert.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = cert.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (err) {
+      setReceiptError(err instanceof Error ? err.message : 'สร้างใบจองไม่สำเร็จ');
+    } finally {
+      setReceiptBusy(false);
+    }
+  };
+
+  const handleSendReceipt = async (override?: { name: string; dataUrl: string }) => {
+    const file = override ?? receiptFile;
+    if (!adminToken || !selectedOrder || !file || receiptBusy) return;
     if (!window.confirm(`ส่งใบจอง ${selectedOrder.orderNumber} ไปที่ ${receiptEmail.trim()} ?`)) return;
     setReceiptBusy(true);
     setReceiptError('');
@@ -277,7 +326,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       const res = await fetch(`/api/admin/orders/${selectedOrder.id}/send-receipt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-        body: JSON.stringify({ email: receiptEmail.trim(), file: { name: receiptFile.name, dataUrl: receiptFile.dataUrl } }),
+        body: JSON.stringify({ email: receiptEmail.trim(), file: { name: file.name, dataUrl: file.dataUrl } }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -285,7 +334,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         return;
       }
       if (data.order) setSelectedOrder(data.order);
-      setReceiptFile(null);
+      if (!override) setReceiptFile(null);
       await fetchDashboard(adminToken);
       showToast(`ส่งใบจอง ${selectedOrder.orderNumber} ไปที่ ${receiptEmail.trim()} แล้ว`, 7000);
     } catch {
@@ -1386,35 +1435,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             ส่งแล้วเมื่อ {new Date(selectedOrder.receiptEmailedAt).toLocaleString('th-TH')} — ส่งซ้ำได้หากต้องการ
                           </p>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => handlePrintCertificate(selectedOrder)}
-                          className="px-3 py-2 min-h-[40px] rounded-lg border border-[#C9A45C] bg-white text-[#14100A] font-bold inline-flex items-center gap-1.5"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          1. พิมพ์ใบจองเพื่อลงนาม
-                        </button>
-                        <div>
-                          <label className="font-semibold block mb-1" htmlFor="receipt-file">
-                            2. แนบไฟล์ใบจองที่ลงนามแล้ว (PDF, JPG หรือ PNG)
-                          </label>
-                          <input
-                            id="receipt-file"
-                            type="file"
-                            accept="application/pdf,image/jpeg,image/png"
-                            onChange={(e) => handlePickReceipt(e.target.files?.[0])}
-                            className="block w-full text-xs file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border file:border-[#C9A45C] file:bg-white file:font-bold"
-                          />
-                          {receiptFile && (
-                            <p className="mt-1 inline-flex items-center gap-1 text-emerald-700 font-semibold">
-                              <Paperclip className="w-3.5 h-3.5" /> {receiptFile.name}
-                            </p>
-                          )}
-                        </div>
                         <div>
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                             <label className="font-semibold" htmlFor="receipt-email">
-                              3. อีเมลผู้ซื้อ
+                              อีเมลผู้ซื้อ
                             </label>
                             <button
                               type="button"
@@ -1437,16 +1461,66 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         {receiptError && <p role="alert" className="text-red-700 font-semibold">{receiptError}</p>}
                         <button
                           type="button"
-                          onClick={handleSendReceipt}
-                          disabled={!receiptFile || !receiptEmail.trim() || receiptBusy || !dashboardData?.mailConfigured}
+                          onClick={handleSendCertificate}
+                          disabled={!receiptEmail.trim() || receiptBusy || !dashboardData?.mailConfigured}
                           className="w-full px-3 py-2.5 min-h-[44px] rounded-lg bg-[#14100A] text-[#FCE694] font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
                         >
                           <Mail className="w-4 h-4" />
-                          {receiptBusy ? 'กำลังส่ง...' : 'ส่งใบจองให้ผู้ซื้อทางอีเมล'}
+                          {receiptBusy ? 'กำลังสร้างและส่ง...' : 'ส่งใบจองพร้อมลายเซ็นทางอีเมล'}
                         </button>
                         {!dashboardData?.mailConfigured && (
-                          <p className="text-amber-800">ยังไม่ได้ตั้งค่าบัญชีอีเมลผู้ส่ง (SMTP) จึงยังกดส่งไม่ได้</p>
+                          <p className="text-amber-800">ยังไม่ได้ตั้งค่าบัญชีอีเมลผู้ส่ง (SMTP) จึงยังกดส่งไม่ได้ — ดาวน์โหลดใบจองด้านล่างไปส่งเองได้</p>
                         )}
+                        <button
+                          type="button"
+                          onClick={handleDownloadCertificate}
+                          disabled={receiptBusy}
+                          className="w-full px-3 py-2 min-h-[40px] rounded-lg border border-[#C9A45C] bg-white text-[#14100A] font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          ดาวน์โหลดใบจองพร้อมลายเซ็น (PDF)
+                        </button>
+                        <details className="pt-1">
+                          <summary className="cursor-pointer font-semibold text-[#5A5244] min-h-[32px] flex items-center">
+                            หรือส่งไฟล์ที่พิมพ์ เซ็นมือ และสแกนเอง
+                          </summary>
+                          <div className="mt-2 space-y-2.5">
+                            <button
+                              type="button"
+                              onClick={() => handlePrintCertificate(selectedOrder)}
+                              className="px-3 py-2 min-h-[40px] rounded-lg border border-[#C9A45C] bg-white text-[#14100A] font-bold inline-flex items-center gap-1.5"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              1. พิมพ์ใบจองเพื่อลงนาม
+                            </button>
+                            <div>
+                              <label className="font-semibold block mb-1" htmlFor="receipt-file">
+                                2. แนบไฟล์ใบจองที่ลงนามแล้ว (PDF, JPG หรือ PNG)
+                              </label>
+                              <input
+                                id="receipt-file"
+                                type="file"
+                                accept="application/pdf,image/jpeg,image/png"
+                                onChange={(e) => handlePickReceipt(e.target.files?.[0])}
+                                className="block w-full text-xs file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border file:border-[#C9A45C] file:bg-white file:font-bold"
+                              />
+                              {receiptFile && (
+                                <p className="mt-1 inline-flex items-center gap-1 text-emerald-700 font-semibold">
+                                  <Paperclip className="w-3.5 h-3.5" /> {receiptFile.name}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleSendReceipt()}
+                              disabled={!receiptFile || !receiptEmail.trim() || receiptBusy || !dashboardData?.mailConfigured}
+                              className="w-full px-3 py-2 min-h-[40px] rounded-lg border border-[#14100A] bg-white text-[#14100A] font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                            >
+                              <Mail className="w-4 h-4" />
+                              ส่งไฟล์ที่แนบให้ผู้ซื้อทางอีเมล
+                            </button>
+                          </div>
+                        </details>
                       </section>
                     )}
 
