@@ -35,12 +35,46 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
   const [mailFailed, setMailFailed] = useState<{ id: string; reason: string }[]>([]);
   const [noEmail, setNoEmail] = useState<string[]>([]);
   const cancelRef = useRef(false);
+  // Everyone starts ticked; staff untick whoever should be left out.
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(orders.map((o) => o.id)));
+  const [query, setQuery] = useState('');
+  const [slipView, setSlipView] = useState<{ id: string; state: 'loading' | 'ready' | 'error'; dataUrl?: string } | null>(null);
 
   const byId = new Map(orders.map((o) => [o.id, o]));
   const label = (id: string) => byId.get(id)?.orderNumber || id;
-  const total = orders.reduce((sum, o) => sum + o.grandTotal, 0);
-  const withEmail = orders.filter((o) => validEmail(o.customerEmail)).length;
+  const chosen = orders.filter((o) => picked.has(o.id));
+  const total = chosen.reduce((sum, o) => sum + o.grandTotal, 0);
+  const withEmail = chosen.filter((o) => validEmail(o.customerEmail)).length;
   const single = orders.length === 1;
+
+  // Same phone or same name twice in the batch: worth a second look before confirming both.
+  const keysOf = (o: OrderRecord) => ['p:' + String(o.customerPhone).replace(/[^0-9]/g, ''), 'n:' + o.customerName.trim().toLowerCase()];
+  const keyCount = new Map<string, number>();
+  orders.forEach((o) => keysOf(o).forEach((k) => keyCount.set(k, (keyCount.get(k) || 0) + 1)));
+  const isDup = (o: OrderRecord) => keysOf(o).some((k) => (keyCount.get(k) || 0) > 1);
+
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? orders.filter((o) => o.orderNumber.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q) || String(o.customerPhone).includes(q))
+    : orders;
+  const togglePick = (id: string) =>
+    setPicked((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const openSlip = async (id: string) => {
+    setSlipView({ id, state: 'loading' });
+    try {
+      const res = await fetch(`/api/admin/orders/${id}/slip`, { headers: { Authorization: `Bearer ${adminToken}` } });
+      const data = await res.json().catch(() => null);
+      setSlipView(res.ok && data?.dataUrl ? { id, state: 'ready', dataUrl: data.dataUrl } : { id, state: 'error' });
+    } catch {
+      setSlipView({ id, state: 'error' });
+    }
+  };
 
   const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` };
 
@@ -50,14 +84,14 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
     cancelRef.current = false;
     let confirmed: string[] = [];
     if (emailOnly) {
-      confirmed = orders.map((o) => o.id);
+      confirmed = chosen.map((o) => o.id);
     } else {
     try {
       setProgress('กำลังยืนยันการชำระเงิน...');
       const res = await fetchWithConflictRetry('/api/admin/orders/bulk-confirm', {
         method: 'POST',
         headers: auth,
-        body: JSON.stringify({ ids: orders.map((o) => o.id) }),
+        body: JSON.stringify({ ids: chosen.map((o) => o.id) }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -134,9 +168,23 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
     setPhase('done');
   };
 
-  return createPortal(
+  const slipOverlay = slipView && (
+    <div
+      role="dialog"
+      aria-label="สลิป"
+      className="fixed inset-0 z-[80] bg-black/85 flex flex-col items-center justify-center p-3 gap-2"
+      onClick={() => setSlipView(null)}
+    >
+      <p className="text-white text-sm font-semibold">{label(slipView.id)} (แตะเพื่อปิด)</p>
+      {slipView.state === 'loading' && <p className="text-white text-sm">กำลังโหลดสลิป...</p>}
+      {slipView.state === 'error' && <p className="text-red-200 text-sm">เปิดสลิปไม่สำเร็จ</p>}
+      {slipView.state === 'ready' && slipView.dataUrl && <img src={slipView.dataUrl} alt="สลิปการโอนเงิน" className="max-h-[85vh] max-w-full object-contain rounded-lg bg-white" />}
+    </div>
+  );
+
+  const main = (
     <div role="dialog" aria-modal="true" aria-label="ยืนยันการชำระเงิน" className="fixed inset-0 z-[70] bg-black/70 flex items-start justify-center p-3 overflow-y-auto">
-      <div className="bg-white border border-[#E8E2D5] rounded-2xl w-full max-w-lg my-auto p-5 space-y-4 text-sm">
+      <div className={`bg-white border border-[#E8E2D5] rounded-2xl w-full ${single ? 'max-w-lg' : 'max-w-2xl'} my-auto p-5 space-y-4 text-sm`}>
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-serif-heritage text-lg font-bold text-[#14100A]">
             {emailOnly
@@ -156,7 +204,7 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
           <>
             <div className="rounded-xl bg-[#F7F2E8] p-3 text-xs space-y-1">
               <p>
-                <strong>{orders.length}</strong> ใบจอง · ยอดรวม <strong>฿{total.toLocaleString('th-TH')}</strong>
+                <strong>{chosen.length}</strong> ใบจองที่จะดำเนินการ{!single ? ` (จาก ${orders.length})` : ''} · ยอดรวม <strong>฿{total.toLocaleString('th-TH')}</strong>
               </p>
               <p className="text-[#5A5244]">
                 {emailOnly
@@ -164,6 +212,65 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
                   : 'จะเปลี่ยนสถานะเป็น “ชำระเงินแล้ว” และ “กำลังคัดตรวจองค์พระ” พร้อมบันทึกประวัติ ย้อนกลับเป็นกลุ่มไม่ได้ (แก้ทีละใบได้)'}
               </p>
             </div>
+
+            {!single && (
+              <div className="rounded-xl border border-[#E8E2D5] text-xs">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 p-2.5 border-b border-[#E8E2D5] bg-[#FBF8F0] rounded-t-xl">
+                  <strong className="text-[#14100A]">เลือกแล้ว {chosen.length} จาก {orders.length} ใบ</strong>
+                  <button type="button" onClick={() => setPicked(new Set(orders.map((o) => o.id)))} className="underline text-[#8A6D2F] font-semibold">
+                    เลือกทั้งหมด
+                  </button>
+                  <button type="button" onClick={() => setPicked(new Set())} className="underline text-[#8A6D2F] font-semibold">
+                    ไม่เลือกเลย
+                  </button>
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="ค้นหาชื่อ / เลขที่ใบจอง / เบอร์"
+                    aria-label="ค้นหาในรายชื่อ"
+                    className="ml-auto flex-1 sm:flex-none sm:w-56 min-w-[150px] px-2.5 py-1.5 border border-[#E8E2D5] rounded-lg bg-white"
+                  />
+                </div>
+                <ul className="max-h-[38vh] overflow-y-auto divide-y divide-[#F0EADB]" aria-label="รายชื่อใบจองที่จะดำเนินการ">
+                  {visible.map((o) => (
+                    <li key={o.id} className={`flex items-start gap-2.5 px-2.5 py-2 ${picked.has(o.id) ? '' : 'bg-[#F7F2E8] text-[#77717C]'}`}>
+                      <input
+                        type="checkbox"
+                        checked={picked.has(o.id)}
+                        onChange={() => togglePick(o.id)}
+                        aria-label={`เลือก ${o.orderNumber}`}
+                        className="mt-1 w-5 h-5 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <p className="font-semibold text-[#14100A] break-words">
+                          <span className="font-tabular">{o.orderNumber}</span> · {o.customerName}
+                        </p>
+                        <p className="text-[11px] text-[#5A5244]">
+                          {o.organization || 'ประชาชนทั่วไป'} · ใบจอง ฿{o.grandTotal.toLocaleString('th-TH')}
+                          {o.slipTransferAmount !== undefined ? ` · แจ้ง ฿${o.slipTransferAmount.toLocaleString('th-TH')}` : ''}
+                          {o.slipUploadedAt
+                            ? ` · แนบ ${new Date(o.slipUploadedAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })}`
+                            : ''}
+                        </p>
+                        <p className="text-[11px] font-semibold flex flex-wrap gap-x-3">
+                          {validEmail(o.customerEmail) ? (
+                            <span className="text-emerald-700">✉ มีอีเมล</span>
+                          ) : (
+                            <span className="text-amber-800">✗ ไม่มีอีเมลที่ใช้ได้ (ยืนยันได้ แต่ส่งอีเมลไม่ได้)</span>
+                          )}
+                          {isDup(o) && <span className="text-red-700">⚠ ชื่อหรือเบอร์ซ้ำกับอีกใบในชุดนี้</span>}
+                        </p>
+                      </div>
+                      <button type="button" onClick={() => openSlip(o.id)} className="shrink-0 underline text-[#8A6D2F] font-semibold">
+                        ดูสลิป
+                      </button>
+                    </li>
+                  ))}
+                  {visible.length === 0 && <li className="p-3 text-[#77717C]">ไม่พบรายการที่ค้นหา</li>}
+                </ul>
+              </div>
+            )}
 
             {!emailOnly && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 space-y-2">
@@ -193,7 +300,7 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
               {!mailConfigured && <p className="text-amber-800">ยังไม่ได้ตั้งค่าอีเมลผู้ส่ง จึงส่งไม่ได้</p>}
               {sendEmail && (
                 <p className="text-[#5A5244]">
-                  มีอีเมลที่ใช้ได้ {withEmail} จาก {orders.length} ใบ ส่งทีละใบ ใช้เวลาราว 1–2 วินาทีต่อใบ แพ็กเกจฟรีของ Resend ส่งได้ราว 100 ฉบับต่อวัน (ใช้ร่วมกับเว็บวิ่ง)
+                  มีอีเมลที่ใช้ได้ {withEmail} จาก {chosen.length} ใบ ส่งทีละใบ ใช้เวลาราว 1–2 วินาทีต่อใบ แพ็กเกจฟรีของ Resend ส่งได้ราว 100 ฉบับต่อวัน (ใช้ร่วมกับเว็บวิ่ง)
                 </p>
               )}
             </div>
@@ -205,11 +312,11 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
               <button
                 type="button"
                 onClick={run}
-                disabled={!checked || (emailOnly && !mailConfigured)}
+                disabled={!checked || chosen.length === 0 || (emailOnly && !mailConfigured)}
                 className="px-5 py-2.5 min-h-[44px] bg-emerald-700 text-white rounded-lg text-xs font-bold disabled:opacity-40 inline-flex items-center gap-1.5"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                {emailOnly ? 'ส่งอีเมล' : sendEmail ? 'ยืนยันชำระและส่งอีเมล' : 'ยืนยันการชำระเงิน'}
+                {(emailOnly ? 'ส่งอีเมล' : sendEmail ? 'ยืนยันชำระและส่งอีเมล' : 'ยืนยันการชำระเงิน') + (single ? '' : ` (${chosen.length})`)}
               </button>
             </div>
           </>
@@ -279,7 +386,13 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
           </div>
         )}
       </div>
-    </div>,
-    document.body,
+    </div>
+  );
+
+  return (
+    <>
+      {createPortal(main, document.body)}
+      {slipOverlay && createPortal(slipOverlay, document.body)}
+    </>
   );
 };
