@@ -9,6 +9,8 @@ interface Props {
   adminToken: string;
   siteConfig: SiteConfig;
   mailConfigured: boolean;
+  /** Orders are already confirmed: only send the certificates (no change to payment status) */
+  emailOnly?: boolean;
   /** changed = something was saved, so the list should be reloaded */
   onClose: (changed: boolean) => void;
 }
@@ -21,9 +23,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * reservation certificate. The server re-checks every order before changing it (still pending, slip
  * attached, stated amount equals the total, not flagged); anything that fails is reported untouched.
  */
-export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteConfig, mailConfigured, onClose }) => {
+export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteConfig, mailConfigured, emailOnly = false, onClose }) => {
   const [phase, setPhase] = useState<'confirm' | 'running' | 'done'>('confirm');
-  const [checked, setChecked] = useState(false);
+  const [checked, setChecked] = useState(emailOnly);
   const [sendEmail, setSendEmail] = useState(mailConfigured);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
@@ -47,6 +49,9 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
     setError('');
     cancelRef.current = false;
     let confirmed: string[] = [];
+    if (emailOnly) {
+      confirmed = orders.map((o) => o.id);
+    } else {
     try {
       setProgress('กำลังยืนยันการชำระเงิน...');
       const res = await fetchWithConflictRetry('/api/admin/orders/bulk-confirm', {
@@ -67,6 +72,7 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
       setError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ ไม่มีใบจองใดถูกเปลี่ยน');
       setPhase('done');
       return;
+    }
     }
 
     if (sendEmail && confirmed.length > 0) {
@@ -133,10 +139,14 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
       <div className="bg-white border border-[#E8E2D5] rounded-2xl w-full max-w-lg my-auto p-5 space-y-4 text-sm">
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-serif-heritage text-lg font-bold text-[#14100A]">
-            {single ? `ยืนยันการชำระเงิน ${orders[0].orderNumber}` : `ยืนยันการชำระเงิน ${orders.length} ใบจอง`}
+            {emailOnly
+              ? `ส่งใบจองทางอีเมล ${orders.length} ใบ`
+              : single
+              ? `ยืนยันการชำระเงิน ${orders[0].orderNumber}`
+              : `ยืนยันการชำระเงิน ${orders.length} ใบจอง`}
           </h3>
           {phase !== 'running' && (
-            <button type="button" onClick={() => onClose(phase === 'done' && confirmedCount > 0)} aria-label="ปิด" className="w-9 h-9 rounded-lg border border-[#E8E2D5] inline-flex items-center justify-center shrink-0">
+            <button type="button" onClick={() => onClose(phase === 'done' && (confirmedCount > 0 || mailed > 0))} aria-label="ปิด" className="w-9 h-9 rounded-lg border border-[#E8E2D5] inline-flex items-center justify-center shrink-0">
               <X className="w-4 h-4" />
             </button>
           )}
@@ -149,10 +159,13 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
                 <strong>{orders.length}</strong> ใบจอง · ยอดรวม <strong>฿{total.toLocaleString('th-TH')}</strong>
               </p>
               <p className="text-[#5A5244]">
-                จะเปลี่ยนสถานะเป็น “ชำระเงินแล้ว” และ “กำลังคัดตรวจองค์พระ” พร้อมบันทึกประวัติ ย้อนกลับเป็นกลุ่มไม่ได้ (แก้ทีละใบได้)
+                {emailOnly
+                  ? 'ใบเหล่านี้ยืนยันการชำระเงินแล้วแต่ยังไม่เคยส่งใบจองทางอีเมล ระบบจะส่งใบจองพร้อมลายเซ็นให้ ไม่เปลี่ยนสถานะใด'
+                  : 'จะเปลี่ยนสถานะเป็น “ชำระเงินแล้ว” และ “กำลังคัดตรวจองค์พระ” พร้อมบันทึกประวัติ ย้อนกลับเป็นกลุ่มไม่ได้ (แก้ทีละใบได้)'}
               </p>
             </div>
 
+            {!emailOnly && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 space-y-2">
               <p>
                 <strong>ยอดที่ “ตรง” คือยอดที่ผู้จองกรอกเองตอนแนบสลิป</strong> ไม่ได้ถูกอ่านจากรูปสลิปหรือเทียบกับธนาคาร จึงต้องตรวจกับรายการเงินเข้าบัญชีก่อนยืนยัน
@@ -162,6 +175,7 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
                 <span>ฉันตรวจกับรายการเงินเข้าบัญชีแล้วว่าใบจองเหล่านี้ชำระจริง</span>
               </label>
             </div>
+            )}
 
             <div className="rounded-xl border border-[#E8E2D5] p-3 text-xs space-y-1.5">
               <label className={`flex items-start gap-2 font-semibold ${mailConfigured ? 'cursor-pointer' : 'opacity-60'}`}>
@@ -191,11 +205,11 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
               <button
                 type="button"
                 onClick={run}
-                disabled={!checked}
+                disabled={!checked || (emailOnly && !mailConfigured)}
                 className="px-5 py-2.5 min-h-[44px] bg-emerald-700 text-white rounded-lg text-xs font-bold disabled:opacity-40 inline-flex items-center gap-1.5"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                {sendEmail ? 'ยืนยันชำระและส่งอีเมล' : 'ยืนยันการชำระเงิน'}
+                {emailOnly ? 'ส่งอีเมล' : sendEmail ? 'ยืนยันชำระและส่งอีเมล' : 'ยืนยันการชำระเงิน'}
               </button>
             </div>
           </>
@@ -220,6 +234,11 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
               <p className="rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 p-3 font-semibold">
                 ✓ ยืนยันการชำระเงินแล้ว {confirmedCount} ใบจอง
                 {sendEmail ? ` · ส่งอีเมลสำเร็จ ${mailed} ฉบับ` : ''}
+              </p>
+            )}
+            {emailOnly && (
+              <p className="rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 p-3 font-semibold">
+                ✓ ส่งอีเมลสำเร็จ {mailed} ฉบับ
               </p>
             )}
             {skipped.length > 0 && (
@@ -253,7 +272,7 @@ export const BulkConfirmDialog: React.FC<Props> = ({ orders, adminToken, siteCon
               </div>
             )}
             <div className="flex justify-end">
-              <button type="button" onClick={() => onClose(confirmedCount > 0)} className="px-5 py-2.5 min-h-[44px] bg-[#14100A] text-[#FCE694] rounded-lg text-xs font-bold">
+              <button type="button" onClick={() => onClose(confirmedCount > 0 || mailed > 0)} className="px-5 py-2.5 min-h-[44px] bg-[#14100A] text-[#FCE694] rounded-lg text-xs font-bold">
                 เสร็จสิ้น
               </button>
             </div>

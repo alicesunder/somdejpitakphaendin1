@@ -486,6 +486,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [orderFilter, setOrderFilter] = useState<'all' | 'ready' | 'failed' | 'no_slip' | 'paid' | 'rejected'>('all');
   const [bulkIds, setBulkIds] = useState<string[]>([]);
   const [bulkOrders, setBulkOrders] = useState<OrderRecord[] | null>(null);
+  const [bulkEmailOnly, setBulkEmailOnly] = useState(false);
 
   const [dayFilter, setDayFilter] = useState(''); // yyyy-mm-dd (Thailand time); '' = every day
   const [dayBasis, setDayBasis] = useState<'booked' | 'paid'>('booked');
@@ -543,6 +544,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   }, [orderFilter, dayFilter, dayBasis, orderSearch]);
   const BULK_MAX = 100;
   const bulkSet = new Set(bulkIds);
+  // Whatever box is open: every order in it that can be confirmed, and every confirmed one never emailed.
+  const readyInView = filteredOrders.filter((o) => slipBucket(o) === 'ready');
+  const unmailedInView = filteredOrders.filter(
+    (o) => slipBucket(o) === 'paid' && !o.receiptEmailedAt && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((o.customerEmail || '').trim()),
+  );
   const bulkSelected = filteredOrders.filter((o) => bulkSet.has(o.id));
   const bulkTotal = bulkSelected.reduce((sum, o) => sum + o.grandTotal, 0);
   const allBulkSelected = filteredOrders.length > 0 && bulkSelected.length === Math.min(filteredOrders.length, BULK_MAX);
@@ -1169,6 +1175,43 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </button>
                 )}
               </div>
+              {(readyInView.length > 0 || unmailedInView.length > 0) && (
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#C9A45C] bg-[#FFF9EA] p-3 text-xs">
+                  <span className="text-[#29222E]">
+                    ในรายการที่แสดง: รอตรวจยอดตรง <strong>{readyInView.length}</strong> ใบ · ผ่านแล้วแต่ยังไม่ได้ส่งอีเมล <strong>{unmailedInView.length}</strong> ใบ
+                  </span>
+                  <div className="ml-auto flex flex-wrap gap-2">
+                    {readyInView.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkEmailOnly(false);
+                          setBulkOrders(readyInView.slice(0, BULK_MAX));
+                        }}
+                        className="px-4 py-2.5 min-h-[44px] rounded-lg bg-emerald-700 text-white font-bold"
+                      >
+                        ✓ ยืนยันชำระ + ส่งอีเมลทั้งหมด ({Math.min(readyInView.length, BULK_MAX)})
+                      </button>
+                    )}
+                    {unmailedInView.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkEmailOnly(true);
+                          setBulkOrders(unmailedInView.slice(0, BULK_MAX));
+                        }}
+                        className="px-4 py-2.5 min-h-[44px] rounded-lg border border-[#14100A] bg-white text-[#14100A] font-bold"
+                      >
+                        ✉ ส่งอีเมลให้ที่ผ่านแล้วแต่ยังไม่ได้ส่ง ({Math.min(unmailedInView.length, BULK_MAX)})
+                      </button>
+                    )}
+                  </div>
+                  {(readyInView.length > BULK_MAX || unmailedInView.length > BULK_MAX) && (
+                    <p className="w-full text-[#5A5244]">ทำได้ครั้งละไม่เกิน {BULK_MAX} ใบ รอบแรกเสร็จแล้วใบที่เหลือจะยังอยู่ในรายการ</p>
+                  )}
+                  <p className="w-full text-[#77717C]">ใบ “ไม่ผ่าน” และใบที่ยังไม่แนบสลิปจะไม่ถูกแตะ</p>
+                </div>
+              )}
               {orderFilter === 'ready' && filteredOrders.length > 0 && (
                 <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-xs">
                   <label className="inline-flex items-center gap-2 font-semibold cursor-pointer">
@@ -1181,7 +1224,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <button
                     type="button"
                     disabled={bulkSelected.length === 0}
-                    onClick={() => setBulkOrders(bulkSelected)}
+                    onClick={() => {
+                      setBulkEmailOnly(false);
+                      setBulkOrders(bulkSelected);
+                    }}
                     className="ml-auto px-4 py-2.5 min-h-[44px] rounded-lg bg-emerald-700 text-white font-bold disabled:opacity-40"
                   >
                     ✓ ยืนยันชำระที่เลือก ({bulkSelected.length})
@@ -1345,10 +1391,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
               {bulkOrders && adminToken && dashboardData && (
                 <BulkConfirmDialog
+                  key={bulkOrders.map((o) => o.id).join(",") + String(bulkEmailOnly)}
                   orders={bulkOrders}
                   adminToken={adminToken}
                   siteConfig={dashboardData.siteConfig}
                   mailConfigured={Boolean(dashboardData.mailConfigured)}
+                  emailOnly={bulkEmailOnly}
                   onClose={async (changed) => {
                     setBulkOrders(null);
                     if (changed) {
@@ -1532,7 +1580,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             {slipBucket(selectedOrder) === 'ready' && (
                               <button
                                 type="button"
-                                onClick={() => setBulkOrders([selectedOrder])}
+                                onClick={() => {
+                                  setBulkEmailOnly(false);
+                                  setBulkOrders([selectedOrder]);
+                                }}
                                 className="w-full px-3 py-3 min-h-[52px] rounded-lg bg-emerald-800 text-white text-sm font-bold ring-2 ring-emerald-300"
                               >
                                 ✓ ยืนยันชำระ + ส่งอีเมลทันที (กดครั้งเดียว)
